@@ -1,0 +1,4 @@
+type[myint int]
+type[arrtype [myint]]
+var[arr1 :arrtype array.fill[0 10]]
+arr1

@@ -1,0 +1,5 @@
+* DONE print with newline <2020-06-19 Fri>
+* TODO parser tests
+  SCHEDULED: <2020-06-20 Sat>
+* type analysis
+* first interpreter

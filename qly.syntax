@@ -1,0 +1,9 @@
+forms: form*
+form: atom | typed-symbol | named-list
+atom: number | bool | string | symbol
+typed-symbol: symbol : type
+type: symbol | named-list
+named-list: symbol[forms]
+
+number:
+atom:
