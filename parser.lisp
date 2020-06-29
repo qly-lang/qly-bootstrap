@@ -4,13 +4,31 @@
   (:import-from :alexandria
    :if-let :read-file-into-string
    :when-let)
-  (:import-from :optima
-   :multiple-value-match :match)
+  (:import-from :trivia
+   :match)
   (:import-from :parse-float
    :parse-float)
   (:export
    :parse-qly-file
-   :parse-qly-text))
+   :parse-qly-text
+
+   :qly-ast :qly-ast-path :qly-ast-mexp* :qly-ast-text
+   :mexp-start :mexp-end :mexp-value :mexp-p
+   :dot-exp-prop :dot-exp-p :dot-exp-value
+   :colon-exp-colon :colon-exp-p :colon-exp-value
+   :call-exp-args :call-exp-p :call-exp-value
+   :quote-exp-p :quote-exp-value
+   :unquote-exp-p :unquote-exp-value
+   :splice-exp-p :splice-exp-value
+   :qly-array-p :qly-array-value
+   :qly-atom-p :qly-atom-value
+   :qly-string-p :qly-string-value
+   :qly-real-p :qly-real-value :qly-real-type
+   :qly-unsigned-p :qly-unsigned-value :qly-unsigned-base :qly-unsigned-base
+   :qly-integer-p :qly-integer-value :qly-integer-type
+   :qly-symbol-p :qly-symbol-value
+
+   :debug-print))
 (in-package :qly.parser)
 
 (defun parse-qly-file (filepath)
@@ -30,7 +48,7 @@
 
 ;;; Possible mexp:
 (defstruct (dot-exp (:include mexp)) prop)
-(defstruct (type-exp (:include mexp)) type)
+(defstruct (colon-exp (:include mexp)) colon)
 (defstruct (call-exp (:include mexp)) args)
 (defstruct (quote-exp (:include mexp)))
 (defstruct (unquote-exp (:include mexp)))
@@ -152,7 +170,7 @@
 
 ;;; Expressions
 
-(defrule mexp (or dot-exp type-exp call-exp
+(defrule mexp (or dot-exp colon-exp call-exp
                   quote-exp unquote-exp splice-exp
                   qly-array qly-atom))
 
@@ -165,13 +183,13 @@
                   :value value
                   :prop prop)))
 
-(defrule type-exp (and mexp (? whitespace) ":" (? whitespace)
-                       (or call-exp quote-exp unquote-exp splice-exp qly-array qly-atom))
-  (:destructure (value w c w type &bounds start end)
-    (make-type-exp :start start
-                   :end end
-                   :value value
-                   :type type)))
+(defrule colon-exp (and mexp (? whitespace) ":" (? whitespace)
+                        (or call-exp quote-exp unquote-exp splice-exp qly-array qly-atom))
+  (:destructure (value w c w colon &bounds start end)
+    (make-colon-exp :start start
+                    :end end
+                    :value value
+                    :colon colon)))
 
 (defrule call-exp (and mexp qly-array)
   (:destructure (value args &bounds start end)
@@ -260,10 +278,10 @@
       (call-next-method)
       (format stream "(~a ~{~a~^ ~})" (call-exp-value object) (qly-array-value (call-exp-args object)))))
 
-(defmethod print-object :around ((object type-exp) stream)
+(defmethod print-object :around ((object colon-exp) stream)
   (if *print-readably*
       (call-next-method)
-      (format stream "(: ~a ~a)" (type-exp-value object) (type-exp-type object))))
+      (format stream "(: ~a ~a)" (colon-exp-value object) (colon-exp-colon object))))
 
 (defmethod print-object :around ((object qly-ast) stream)
   (if *print-readably*
@@ -342,12 +360,12 @@
      (princ "]" stream)
      (incf col)
      (pop last-bracket-col))
-    (type-exp
+    (colon-exp
      (princ ":[" stream)
      (incf col 2)
      (push (1- col) last-bracket-col)
      (multiple-value-setq (last-end last-bracket-col col)
-       (debug-print-mexp* text (list (type-exp-value mexp) (type-exp-type mexp)) stream last-end last-bracket-col col))
+       (debug-print-mexp* text (list (colon-exp-value mexp) (colon-exp-colon mexp)) stream last-end last-bracket-col col))
      (princ "]" stream)
      (incf col)
      (pop last-bracket-col))

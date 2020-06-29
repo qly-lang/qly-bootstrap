@@ -2,4 +2,6 @@
 * TODO parser tests
   SCHEDULED: <2020-06-20 Sat>
 * type analysis
+* var refer to
+* semantic error check
 * first interpreter

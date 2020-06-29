@@ -7,10 +7,12 @@
   :version "0.0.1"
   :serial t
   :depends-on (:alexandria
-               :optima
+               :trivia
                :esrap
                :parse-float
                :apply-argv)
   :components ((:file "parser")
+               (:file "sem")
+               (:file "translator")
                (:file "compiler")
                (:file "qly")))

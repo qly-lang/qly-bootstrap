@@ -1,6 +1,6 @@
-f[do_nothing1:int [a:int b:string]
+f[do_nothing1 [a:integer b:string]:integer
    do_nothing2[+[a 1]]
    0
 ]
-f[do_nothing2:string [d:int] do_nothing1[0 "str2"] " "]
+f[do_nothing2 [d:integer]:string do_nothing1[0 "str2"] " "]
 do_nothing1[0 "str2"]
