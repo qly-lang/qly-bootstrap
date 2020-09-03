@@ -1,7 +1,8 @@
 (in-package :cl-user)
 (defpackage :qly.sem
   (:use :cl :qly.parser)
-  (:import-from :trivia :match))
+  (:import-from :trivia :match)
+  (:inport-from :alexandria :if-let :when-let))
 (in-package :qly.sem)
 
 ;;; Chain of environment
@@ -16,8 +17,18 @@
 
 (defun lookup (name env)
   (or (lookup/direct name env)
-      (alexandria:when-let ((parent (env-chain-%parent env)))
+      (when-let ((parent (env-chain-%parent env)))
         (lookup name parent))))
+
+(defun lookup-symbol-def (qly-symbol env)
+  (if-let (def (lookup/direct (qly-symbol-value qly-symbol)))
+    (if (> (qly-symbol-start qly-symbol)
+           (call-exp-end (var-def-mexp def)))
+        def
+        (when-let ((parent (env-chain-%parent env)))
+          (lookup-symbol-def name parent)))
+    (when-let ((parent (env-chain-%parent env)))
+      (lookup-symbol-def name parent))))
 
 (defun (setf lookup) (new-value name env)
   (setf (gethash name (env-chain-%env env)) new-value))
@@ -49,9 +60,78 @@
 
 (defvar *builtin-var-defs*
   (let ((var-defs (make-env-chain)))
-    (setf (lookup :|v| var-defs) (make-var-def)
-          (lookup :|f| var-defs) (make-var-def)
-          (lookup :|t| var-defs) (make-var-def))
+    (setf
+     ;;; std primitives
+     (lookup :|true| var-defs) (make-var-def)
+     (lookup :|false| var-defs) (make-var-def)
+
+     (lookup :|v| var-defs) (make-var-def)
+     (lookup :|f| var-defs) (make-var-def)
+     (lookup :|t| var-defs) (make-var-def)
+     (lookup :|block| var-defs) (make-var-def)
+     (lookup :|if| var-defs) (make-var-def)
+     (lookup :|while| var-defs) (make-var-def)
+     (lookup :|continue| var-defs) (make-var-def)
+     (lookup :|break| var-defs) (make-var-def)
+     (lookup :|return| var-defs) (make-var-def)
+     (lookup :|set| var-defs) (make-var-def)
+     (lookup :|+| var-defs) (make-var-def)
+     (lookup :|-| var-defs) (make-var-def)
+     (lookup :|*| var-defs) (make-var-def)
+     (lookup :|/| var-defs) (make-var-def)
+     (lookup :|**| var-defs) (make-var-def)
+     (lookup :|is| var-defs) (make-var-def)
+     (lookup :|=| var-defs) (make-var-def)
+     (lookup :|!=| var-defs) (make-var-def)
+     (lookup :|>| var-defs) (make-var-def)
+     (lookup :|<| var-defs) (make-var-def)
+     (lookup :|>=| var-defs) (make-var-def)
+     (lookup :|<=| var-defs) (make-var-def)
+     (lookup :|>>| var-defs) (make-var-def)
+     (lookup :|<<| var-defs) (make-var-def)
+     (lookup :|&| var-defs) (make-var-def)
+     (lookup :\| var-defs) (make-var-def)
+     (lookup :|^| var-defs) (make-var-def)
+     (lookup :|and| var-defs) (make-var-def)
+     (lookup :|or| var-defs) (make-var-def)
+     (lookup :|not| var-defs) (make-var-def)
+
+     (lookup :|length| var-defs) (make-var-def)
+     (lookup :|slice| var-defs) (make-var-def)
+     (lookup :|append| var-defs) (make-var-def)
+     (lookup :|concat| var-defs) (make-var-def)
+     (lookup :|del| var-defs) (make-var-def)
+     (lookup :|to-string| var-defs) (make-var-def)
+     (lookup :|to-symbol| var-defs) (make-var-def)
+
+     (lookup :|to-i8| var-defs) (make-var-def)
+     (lookup :|to-i16| var-defs) (make-var-def)
+     (lookup :|to-i32| var-defs) (make-var-def)
+     (lookup :|to-i64| var-defs) (make-var-def)
+     (lookup :|to-i128| var-defs) (make-var-def)
+     (lookup :|to-bignum| var-defs) (make-var-def)
+     (lookup :|to-u8| var-defs) (make-var-def)
+     (lookup :|to-u16| var-defs) (make-var-def)
+     (lookup :|to-u32| var-defs) (make-var-def)
+     (lookup :|to-u64| var-defs) (make-var-def)
+     (lookup :|to-u128| var-defs) (make-var-def)
+     (lookup :|to-f32| var-defs) (make-var-def)
+     (lookup :|to-f64| var-defs) (make-var-def)
+     (lookup :|to-decimal| var-defs) (make-var-def)
+
+     (lookup :|shallow-copy| var-defs) (make-var-def)
+     (lookup :|copy| var-defs) (make-var-def)
+     (lookup :|move| var-defs) (make-var-def)
+     (lookup :|weak| var-defs) (make-var-def)
+
+     (lookup :|ffi| var-defs) (make-var-def)
+     (lookup :|syscall| var-defs) (make-var-def)
+
+     ;;; std extended
+     (lookup :|for| var-defs) (make-var-def)
+     (lookup :|cond| var-defs) (make-var-def)
+     (lookup :|++| var-defs) (make-var-def)
+     (lookup :|--| var-defs) (make-var-def))
     var-defs))
 (defvar *builtin-type-defs*
   (let ((type-defs (make-env-chain)))
@@ -82,9 +162,9 @@
 (defun make-scope (&optional (parent-scope *builtin-scope*) mexp)
   (%make-scope :mexp mexp
                :var-defs (make-env-chain (scope-var-defs parent-scope))
-               :var-occurs (make-env-chain)
+               :var-occurs  (make-hash-table :test #'equal)
                :type-defs (make-env-chain (scope-type-defs parent-scope))
-               :type-occurs (make-env-chain)))
+               :type-occurs (make-hash-table :test #'equal)))
 
 ;;; Main semantic analysis entry
 
@@ -93,10 +173,9 @@
                                :scopes (make-hash-table :test #'equal))))
     ;; Passes of semantic analysis
     (analyze-type qly-sem)
-    ;; (resolve-var qly-sem)
+    (resolve-var qly-sem)
     ;; (check-error qly-sem)
-    )
-  )
+    ))
 
 ;;; Basic type building blocks
 
@@ -126,7 +205,6 @@
   (match mexp
     (;; v[var : type value]
      ;; type must be defined before, value must compatible with type (check in later pass)
-
      (call-exp :value (qly-symbol :value :|v|) :args
                (qly-array :value
                           (list (colon-exp :value (qly-symbol :value var)
@@ -177,6 +255,10 @@
      (setf (lookup type (scope-type-defs scope)) (process-type type typedef scope)))) )
 
 ;; In third pass, go inside fun body, recursively process three passes
+;; TODO: we did not go into other mexp that might have f[], such as block[... f[]]
+;; We also didn't check any block[...] which should be seen as f[noname [] ...] noname[]
+;; We also didn't handle lambda: f[[args]:ret body]
+;; We also didn't consider quote and unquote
 (defun analyze-type-mexp-in (mexp scope scopes)
   (match mexp
     (;; f[fname signature mexp*]
@@ -188,6 +270,7 @@
      (when (qly-symbol-p fname)
        (let ((scope (make-scope scope mexp)))
          (setf (gethash fname scopes) scope)
+         (setf (gethash mexp scopes) scope)
          (analyze-type-mexp* mexp* scope scopes))))))
 
 (defun process-param-types (params scope)
@@ -225,6 +308,66 @@
                (make-record-field :name field-name :type (process-type field-type scope)))))
           fields))
 
-(defun resolve-var (qly-sem))
+;;; Resolve var pass, resolve every var to its definition
+
+(defun resolve-var (qly-sem)
+  (loop for mexp in (qly-ast-sem* (qly-sem-qly-ast qly-sem))
+        do (resolve-var-mexp mexp (qly-sem-scopes qly-sem) (gethash :root (qly-sem-scopes qly-sem)) 0)))
 
+(defun resolve-var-mexp (mexp scopes scope quote)
+  (match mexp
+    ((dot-exp :value value :prop prop)
+     (resolve-var-mexp value scopes scope quote)
+     (resolve-var-mexp prop scopes scope quote))
+    ((quote-exp :value value)
+     (resolve-var-mexp value scopes scope (1+ quote)))
+    ((unquote-exp :value value)
+     (resolve-var-mexp value scopes scope (1- quote)))
+    ((splice-exp :value value)
+     (resolve-var-mexp value scopes scope (1- quote)))
+    ((call-exp)
+     (resolve-var-call-exp mexp scopes scope quote))
+    ((qly-symbol)
+     (resolve-var-qly-symbol mexp scopes scope quote))
+    ((qly-array :value mexp*)
+     (loop for mexp in mexp*
+           do (resolve-var-mexp mexp scopes scope quote)))))
+
+(defun resolve-var-qly-symbol (qly-symbol scopes scope quote)
+  (cond
+    ((plusp quote))
+    ;; Maybe detect in parser?
+    ((minusp quote) (error "Comma not inside a quote"))
+    (t
+     (if-let (def (lookup-symbol-def qly-symbol (scope-var-defs scope)))
+       (setf (lookup qly-symbol scopes) scope
+             (lookup qly-symbol (scope-var-occurs scope)) def)
+       (error "Cannot resolve var")))))
+
+(defun resolve-var-call-exp (call-exp scopes scope quote)
+  (when-let (fdef (resolve-var-qly-symbol (call-exp-value call-exp) scopes scope quote))
+    (cond
+      ((builtin-fdef-p fdef)
+       (resolve-var-builtin-fdef call-exp scopes scope quote))
+      (t
+       (loop for mexp in (qly-array-value (call-exp-args call-exp))
+             do (resolve-var-mexp scopes scope quote))))))
+
+(defun resolve-var-builtin-fdef (call-exp scopes scope quote)
+  (match call-exp
+    ((call-exp :value (qly-symbol :value :|f|)
+               :args (qly-array :value (list* (qly-symbol :value fname) _ mexp*)))
+     (loop for mexp in mexp*
+           do (resolve-var-mexp mexp scopes (gethash fname scopes) quote)))
+    ((call-exp :value (qly-symbol :value :|v|)
+               (qly-array :value
+                          (list _ value)))
+     (resolve-var-mexp mexp scopes scope quote))
+    ;; TODO: more builtin special ops and fs
+
+    ))
+
+
+;;; Check error pass, check type error and other semantic erros
+
 (defun check-error (qly-sem))

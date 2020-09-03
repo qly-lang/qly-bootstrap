@@ -1,0 +1,30 @@
+use[ink-core.storage]
+
+ink.storage[
+t[Incrementer r[
+    value : storage.Value[i32]
+    my-value: storage.HashMap[AccountId u64]
+]]
+]
+
+ink.contructor[
+f[new [self:Incrementer init-value:i32]
+    set[self.value init-value]]
+
+f[default [self:Incrementer]
+    self.new[0]]
+]
+
+ink.message[
+f[get [self:Incrementer]:i32
+    self.value]
+
+f[inc [self:Incrementer]:i32
+    self.my-value-or-zero[self.env[].caller[]]]
+
+]
+
+f[my-value-or-zero [self:Incrementer of:AccountId]:u64
+    v[value self.my-value.get[of].unwrap-or[0]]
+    value
+]

@@ -1,6 +1,6 @@
-type[rectype [name:string age:int]]
-var[rec1 :rectype [name: "Nobody" age: 1000]]
-var[name "age"]
-set[rec1["name"] "Somebody"]
+t[rectype [name:string age:int]]
+v[rec1 :rectype [name: "Nobody" age: 1000]]
+v[name "age"]
+set[rec1['name] "Somebody"]
 set[rec1.name "Allbody"]
 rec1

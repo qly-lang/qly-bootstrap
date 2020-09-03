@@ -40,8 +40,7 @@
   (make-qly-ast :mexp* (parse 'mexp* text)
                 :text text))
 
-;;; AST nodes
-
+;;; AST node
 (defstruct mexp start end value)
 
 (defstruct qly-ast path mexp* text)
@@ -174,17 +173,21 @@
                   quote-exp unquote-exp splice-exp
                   qly-array qly-atom))
 
-(defrule dot-exp (and mexp (? whitespace) "." (? whitespace)
-                      (or call-exp quote-exp unquote-exp splice-exp
-                          qly-array qly-atom))
+(defrule mexp-except-colon (or dot-exp call-exp quote-exp unquote-exp splice-exp qly-array qly-atom))
+
+(defrule mexp-except-colon-dot (or call-exp quote-exp unquote-exp splice-exp
+                                   qly-array qly-atom))
+
+(defrule dot-exp (and mexp-except-colon (? whitespace) "." (? whitespace)
+                      mexp-except-colon-dot)
   (:destructure (value w d w prop &bounds start end)
     (make-dot-exp :start start
                   :end end
                   :value value
                   :prop prop)))
 
-(defrule colon-exp (and mexp (? whitespace) ":" (? whitespace)
-                        (or call-exp quote-exp unquote-exp splice-exp qly-array qly-atom))
+(defrule colon-exp (and mexp-except-colon (? whitespace) ":" (? whitespace)
+                        mexp-except-colon)
   (:destructure (value w c w colon &bounds start end)
     (make-colon-exp :start start
                     :end end

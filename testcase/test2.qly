@@ -1,4 +1,4 @@
-type[myint int]
-type[arrtype [myint]]
-var[arr1 :arrtype array.fill[0 10]]
+t[myint int]
+t[arrtype [myint]]
+v[arr1 :arrtype array.fill[0 10]]
 arr1

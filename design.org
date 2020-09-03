@@ -1,0 +1,104 @@
+* Syntax
+#+BEGIN_SRC
+mexp* := (and (* mexp-or-comment) (? whitespace))
+mexp-or-comment := (and (? whitespace) (or mexp qly-comment))
+TODO
+#+END_SRC
+
+* Builtin Types
+*** Primitive types
+*** Aggregate types
+
+* Semantics
+** Define a var
+If type is not specified, it will be inferred from context.
+#+BEGIN_SRC
+v[name : type val]
+v[name val]
+v[name : type]
+#+END_SRC
+
+** Define a type
+Type use a different namespace than vars.
+#+BEGIN_SRC
+t[name def]
+#+END_SRC
+
+** Define a function
+Any unspecify typed args will be type inferred. Form will return a function object. If name is omitted, an anonymous function is defined. Function and var shares same namespace.
+#+BEGIN_SRC
+f[fname[arg1 arg2 ...]
+  mexp1
+  mexp2]
+f[fname[arg1:type1 ...]:rettype
+  mexp1
+  mexp2]
+f[[arg1 arg2:type2]:rettype
+  mexp1
+  mexp2]
+#+END_SRC
+
+** Block
+A block explicitly introduces a lexical scope. Top level and inside a function body introduce an implicit lexical scope. In Qly, all var in the same lexical scope is available, regardless there sequence of definition. It's not allowed to have same var defined twice in the same lexical scope
+#+BEGIN_SRC
+b[mexp1
+  mexp2
+  ...]
+#+END_SRC
+
+** Control Flows
+*** If
+#+BEGIN_SRC
+
+#+END_SRC
+
+*** Goto labels
+
+*** While loop
+
+*** For loop
+
+*** Return from function, break and continue
+
+** Condition System: todo, for now use only return
+
+** Generic Function and Protocol Types
+
+* Extensions
+** Parser macro
+** Macro
+** Compiler macro
+
+* Runtime
+** Memory System
+*** Default: ARC, auto move and manual weak ref
+*** GC
+*** Manual
+
+** Raw memory and register operation
+
+** Syscall
+
+** FFI
+
+* Standard Library
+** Thread
+** Async IO
+** Data Structures
+** io
+** net
+** math, on cpu, gpu and quantum
+** x
+** opengl
+** browser
+
+* Compilation
+** Full context type inference
+** Apply extensions
+** Coolgate IR
+** x86 target
+** arm target
+** risc-v target
+** GPGPU target
+** quantum target
+** Wasm target
