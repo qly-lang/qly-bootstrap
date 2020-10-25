@@ -1,14 +1,108 @@
+
 * Syntax
 #+BEGIN_SRC
-mexp* := (and (* mexp-or-comment) (? whitespace))
-mexp-or-comment := (and (? whitespace) (or mexp qly-comment))
-TODO
+mexp* := (and (? whitespace) (* mexp-whitespace))
+mexp-whitespace := (and mexp (? whitespace))
+whitespace := (+ (or qly-comment whitespace-char))
+mexp := (or dot-exp colon-exp call-exp
+            quote-exp unquote-exp splice-exp
+            qly-array qly-atom)
+qly-comment := (and "#" (* (not "\n")) (or "\n" eof))
+whitespace-char := (or " " "\t" "\n")
+eof := (! character)
+
+dot-exp := (and mexp-except-colon (? whitespace) "." (? whitespace) mexp-except-colon-dot)
+colon-exp := (and mexp-except-colon (? whitespace) ":" (? whitespace) mexp-except-colon)
+call-exp := (and mexp qly-array)
+quote-exp := (and "'" (? whitespace) mexp)
+unquote-exp := (and "," (? whitespace) mexp)
+splice-exp := (and "@" (? whitespace) mexp)
+qly-array := (and "[" mexp* "]")
+qly-atom := (or qly-string qly-real qly-unsigned qly-integer qly-symbol)
+
+mexp-except-colon (or dot-exp call-exp quote-exp unquote-exp splice-exp qly-array qly-atom)
+mexp-except-colon-dot (or call-exp quote-exp unquote-exp splice-exp qly-array qly-atom)
+
+qly-string := (and #\" (* string-char) #\")
+qly-real := (and (? (or "+" "-"))
+                 (or (and (+ digit-char) "." (* digit-char)
+                          (? (and (or "e" "E") (? (or "+" "-")) (+ digit-char))))
+                     (and (* digit-char) "." (+ digit-char)
+                          (? (and (or "e" "E") (? (or "+" "-")) (+ digit-char))))
+                     (and (+ digit-char)
+                          (or "e" "E") (? (or "+" "-")) (+ digit-char)))
+                 (! symbol-char))
+qly-unsigned := (and (or (and "0x" (+ hex-char))
+                         (and "0o" (+ oct-char))
+                         (and "0b" (+ bin-char)))
+                     (! symbol-char))
+qly-integer := (and (? (or "+" "-")) (+ digit-char)
+                    (! (or symbol-char ".")))
+qly-symbol := (+ symbol-char)
+
+string-char := (or (and #\\ character) not-doublequote)
+digit-char := (digit-char-p character)
+symbol-char := (or (and #\\ character) raw-symbol-char)
+hex-char := (digit-char-p char 16)
+oct-char := (digit-char-p char 8)
+bin-char := (digit-char-p char 2)
+not-doublequote := (! "\"")
+raw-symbol-char := (! (or whitespace-char rule-char))
+rule-char := (or "." "[" ":"" "]" "\"" "\\" "'" "," "@" "#")
+
 #+END_SRC
 
 * Builtin Types
 *** Primitive types
-*** Aggregate types
+**** empty type
+Only nil, means nothing. Explict denote a function returns nothing is ~f[fname[args]:nil]~. nil is both a type and a symbol. The value of symbol nil is not a symbol and can be seen as nothing.
+**** bool
+Only true and false and only bool type can be used in ~if~ condition. They can be expressed by true and false symbol. The value of true and false symbol is not symbol but "true" "false" value. In the other word, ~true~ is not ~'true~
+**** symbol
+An interned string that can include any character. To write a symbol literal, use ~'~ before it, such as ~'i-am-a-symbol~. For whitespace, newline, tab, quote, bracket, dot, backquote, comma, backslash and sharp (which are special macro characters), they need to escape by ~\~. Symbol has no name space. A module expression ~A.B~ is a dot expression with two symbols: ~A~ and ~B~. Symbol is equal if and only if the string is same.
+**** (signed) integer
+- integer: machine native integer type. in 32 bit machine it's i32, in 64 bit machine it's i64
+- i8, i16, i32, i64, i128, i256
 
+A integer literal is of type integer. Unless use 3:i8 or explictly mark type when define var: v[x:i8 3]
+**** unsigned integer
+- unsigned: machine native integer type. in 32 bit machine it's u32, in 64 bit machine it's u64
+- u8, u16, u32, u64, u128, u256
+
+Use 3:u8 as unsigned literal. Or use 0xf, 0b0011, 0o77, which means unsigned type.
+**** big integer
+Bigger than i256 and u256 is expressed as big integer. Big integer is always signed and has infinite number precision (when memory allows)
+**** real
+real always mean f64 in all machines. There is also f32, f64, f128 and f256 type can be used.
+**** decimal
+For more precision than f256 is expressed as decimal, which has infinite precision (when memory allows)
+**** other mathematical types
+Other mathematical type is supported via standard library, such as rational number, number or expression in group, ring and field.
+*** Aggregate types
+**** string
+string is internally UTF-8 encoded u8 array. It support all array operations as well as string specific operation
+**** atom
+All above primitive type and string is consider a single unit of the qly language and is atom type. Formally:
+#+BEGIN_SRC
+t[atom or[nil bool symbol integer i8 ... i256 unsigned u8 ... u256 real f32 ... f256 decimal string]]
+#+END_SRC
+
+**** array
+~array[type]~ denote a dynamic array of type ~type~
+**** record
+~record[field1:type1 field2:type2 ...]~ denote an aggregate record in contiguous memory. It has ~field1~, ~field2~, etc. of ~type1~, ~type2~, etc.
+**** or type
+~or~ type means one of type in all given candidate types.
+**** named array
+named array is a meta type of ~symbol[mexp1 mexp2]~ and mostly used for meta programming.
+**** mexp
+mexp is any valid qly expression.
+**** low level types
+There's some additional low level types that help for more performance:
+- buffer[type n]: boundary checked fixed size array
+- enum[CAND0 CAND1 CANDN]: c-like enum that has CAND0, ... CANDN which equals to 0, ..., N respectively
+- union[CAND0 CAND1 CANDN]: c-like union that has shared memory of same type
+- emb[x]: used in struct, embed type x. By default type is reference type, embed type take that part of memory and put it inline.
 * Semantics
 ** Define a var
 If type is not specified, it will be inferred from context.
@@ -49,7 +143,9 @@ b[mexp1
 ** Control Flows
 *** If
 #+BEGIN_SRC
-
+if[condition
+   then-branch
+   else-branch]
 #+END_SRC
 
 *** Goto labels
@@ -63,15 +159,43 @@ b[mexp1
 ** Condition System: todo, for now use only return
 
 ** Generic Function and Protocol Types
+Generic Function is function defined with same name, same length of arguments but different types. It's a general way to achieve polymorphism. Any collection of Generic Function implictly determines a Protocol Type. Implicit Protocol Type can be named to Explicit Protocol Type. Both Implicit and Explicit Protocol Type is used by Qly Compiler to do type inference, if a value is not specified a type and used as arguments as one or more generic functions. The difference between a Protocol Type to a Trait or an Interface in other programming language is Protocol Type is more general, can polymorphic on more than one arguments. Therefore, there's no such concept as ~self~ of ~this~ in a generic function (method in other lnguages), instead, all arguments can be specialized and polymorphic to different type. For convininience purpose, qly has a ~.~ syntax sugar, which will convert a ~a.b[c]~ call to ~b[a c]~ so it looks as simple as a method call and you can always consider first argument of a generic function as `self`
+
+To define a protocol type, use
+#+BEGIN_SRC
+t[protocol-name
+  p[[type-arg1 type-arg2 ...]
+    f[name1 [type-arg1 known-type1 ...]:rettype]
+    f[name2 [type-arg1 type-arg2 known-type2 ...]:rettype2]]]
+#+END_SRC
+
+one argument can be bind by a protocol type of a partial protocol type, such as ~a:protocol-type1~ (if protocol-type1 just has one type arg that's just a. this is same as interface in other language). ~a:protocol2[a str]~ means ~a~ satisfy a protocol type that, together with str obey protocol2.
+
+If a and b together satisfy a protocol type X and we want to indicate that in the type annotation, we can do:
+#+BEGIN_SRC
+f[fname [a:X.a b:X.b] ...]
+t[protocol2
+  p[arg
+    f[name1 [X.a X.b arg]]]]
+#+END_SRC
+
+And in protocol type definition you need specify types, but in function definition it's often can be omit and type inferencer will inference the type.
 
 * Extensions
 ** Parser macro
 ** Macro
+** Generics
+There is no generic types in qly. Instead, generic is a kind of code generation that just a special case of macros. There's helper library to define generic types with macros.
 ** Compiler macro
 
 * Runtime
 ** Memory System
 *** Default: ARC, auto move and manual weak ref
+This is a balanced setup that good for most situation, only consider use GC when there's a lot of weak reference. Only consider use manual memory management when extreme high performance or low memory usages such as very limited embed environment.
+
+When doing a ~s~ to a variable, if compiler detects no further access to original variable happens, it's been moved to new var or new location. Otherwise, an automatic reference counting (ARC) happens. If in ARC case and there's a need for circular reference, use explicit weak reference to avoid circle. The syntax is ~r[source]~
+
+Rust style move-by-default, explict-Arc memory management is a bad design. User often end up with a lot of Arc in a complex program. In the case of simple program where move is enough, qly compiler is smart enough to optimize an Arc to a move. In both case it's as efficient as Rust but more convinient to the programmer.
 *** GC
 *** Manual
 
@@ -94,6 +218,75 @@ b[mexp1
 
 * Compilation
 ** Full context type inference
+Assume there is a function ~print[x:str]~ and another function ~print[x:i32]~, a function ~+[x:int y:int]~ and also ~append[x:str y:str]~. We have following snippet:
+#+BEGIN_SRC
+f[print-fancy[x]
+  print[x]
+  print["aaa"]
+  print[append[x "ccc"]]]
+#+END_SRC
+
+Inferencer knows:
+#+BEGIN_SRC
+x: print-protocol, where print[a:print-protocol]
+x: str
+#+END_SRC
+two restrictions doesn't conflict, and infer to ~x:str~, and we also know ~print-fancy: f[str]:nil~
+
+In general:
+- from a function call of known type, we know types of every arguments
+- from a general-function call of known type, we know types of non specialized arguments, and protocol type of specialized arguments
+- If argument is an expression, we trying to further infer type of argument occur in expression
+- If argument is a var, we infer this var to be of that type
+- If a var is inferred with multiple type, they must be all satisfied or it's a compile time type error
+
+If there's recursive function, thing is more difficult
+#+BEGIN_SRC
+f[fun1[a b]
+  g[a h[b]]]
+
+f[g[a b]
+  [if =[a 1]
+      fun1[a h[b]]]
+      fun1[-[a 1] h[b]]]
+
+f[h[c]
+  3]
+#+END_SRC
+
+Type inference from top level:
+#+BEGIN_SRC
+fun1: [? ?]:?
+g:[? ?]:?
+h:[?]:?
+#+END_SRC
+
+Go inside fun1:
+#+BEGIN_SRC
+fun1: [a1 a3]:r1
+g:[a1 a2]:r1
+h:[a3]:a2
+#+END_SRC
+
+Go inside g:
+#+BEGIN_SRC
+a1: int
+a3: a2
+fun1: [int a2]:r1
+g: [int a2]:r1
+h: [a2]:a2
+#+END_SRC
+
+Go inside h:
+#+BEGIN_SRC
+a2: int
+r1: ?
+#+END_SRC
+
+Type inference priorities:
+1. orignal var type annotation, function args type annotation
+2. if a function args or var missing type annotation, how is it been used.
+
 ** Apply extensions
 ** Coolgate IR
 ** x86 target

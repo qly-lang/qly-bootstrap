@@ -40,10 +40,8 @@
   (make-qly-ast :mexp* (parse 'mexp* text)
                 :text text))
 
-;;; AST node
-(defstruct mexp start end value)
-
 (defstruct qly-ast path mexp* text)
+(defstruct mexp start end value)
 
 ;;; Possible mexp:
 (defstruct (dot-exp (:include mexp)) prop)
@@ -64,39 +62,62 @@
 
 ;;; Utility functions
 
-(defun not-doublequote (char)
+(defun not-doublequote-p (char)
   (not (eql #\" char)))
 
-(defun whitespace-char (char)
+(defun whitespace-char-p (char)
   (member char '(#\space #\tab #\newline)))
 
-(defun rule-char (char)
+(defun rule-char-p (char)
   (member char '(#\. #\[ #\: #\] #\" #\\ #\' #\, #\@ #\# )))
 
-(defun raw-symbol-char (char)
+(defun raw-symbol-char-p (char)
   (and (not (whitespace-char char)) (not (rule-char char))))
 
-(defun bin-char (char)
+(defun bin-char-p (char)
   (digit-char-p char 2))
 
-(defun oct-char (char)
+(defun oct-char-p (char)
   (digit-char-p char 8))
 
-(defun hex-char (char)
+(defun hex-char-p (char)
   (digit-char-p char 16))
 
 ;;; Utility rules
 
-(defrule whitespace (+ (whitespace-char character))
-  (:constant nil))
-
 (defrule string-char (or (and #\\ character) (not-doublequote character)))
 
 (defrule symbol-char (or (and #\\ character) (raw-symbol-char character)))
 
 (defrule digit-char (digit-char-p character))
 
+(defrule not-doublequote (not-doublequote-p character))
+
+(defrule rule-char (rule-char-p character))
+
+(defrule raw-symbol-char (raw-symbol-char-p character))
+
+(defrule bin-char (bin-char-p character))
+
+(defrule oct-char (oct-char-p character))
+
+(defrule hex-char (hex-char-p character))
+
+(defrule whitespace-char (whitespace-char-p character))
+
 (defrule eof (! character))
+
+(defrule qly-comment (and "#" (* (not #\newline)) (or #\newline eof))
+  (:constant nil))
+
+(defrule whitespace (+ (or whitespace-char qly-comment))
+  (:constant nil))
+
+(defrule mexp-whitespace (and mexp (? whitespace))
+  (:function first))
+
+(defrule mexp* (and (? whitespace) (* mexp-whitespace))
+  (:function second))
 
 ;;; Atoms
 
@@ -104,10 +125,10 @@
 
 (defrule qly-string (and #\" (* string-char) #\")
   (:destructure (q1 string q2 &bounds start end)
-    (declare (ignore q1 q2))
-    (make-qly-string :start start
-                     :end end
-                     :value (text string))))
+                (declare (ignore q1 q2))
+                (make-qly-string :start start
+                                 :end end
+                                 :value (text string))))
 
 (defrule qly-integer (and (? (or "+" "-")) (+ digit-char)
                           (! (or symbol-char ".")))
@@ -126,12 +147,12 @@
 
 (defrule qly-real
     (and (? (or "+" "-"))
-         (or (and (+ (digit-char-p character)) "." (* (digit-char-p character))
-                  (? (and (or "e" "E") (? (or "+" "-")) (+ (digit-char-p character)))))
-             (and (* (digit-char-p character)) "." (+ (digit-char-p character))
-                  (? (and (or "e" "E") (? (or "+" "-")) (+ (digit-char-p character)))))
-             (and (+ (digit-char-p character))
-                  (or "e" "E") (? (or "+" "-")) (+ (digit-char-p character))))
+         (or (and (+ digit-char) "." (* digit-char)
+                  (? (and (or "e" "E") (? (or "+" "-")) (+ digit-char))))
+             (and (* digit-char) "." (+ digit-char)
+                  (? (and (or "e" "E") (? (or "+" "-")) (+ digit-char))))
+             (and (+ digit-char)
+                  (or "e" "E") (? (or "+" "-")) (+ digit-char)))
          (! symbol-char))
   (:lambda (list &bounds start end)
     (make-qly-real :start start
@@ -139,9 +160,9 @@
                    :value (parse-float (text list))
                    :type :f64)))
 
-(defrule qly-unsigned (and (or (and "0x" (+ (hex-char character)))
-                               (and "0o" (+ (oct-char character)))
-                               (and "0b" (+ (bin-char character))))
+(defrule qly-unsigned (and (or (and "0x" (+ hex-char))
+                               (and "0o" (+ oct-char))
+                               (and "0b" (+ bin-char)))
                            (! symbol-char))
   (:lambda (list)
     (let ((radix (case (aref (first list) 1)
@@ -150,16 +171,16 @@
                    (#\b 2))))
       (list (parse-integer (text list) :radix radix) radix)))
   (:destructure (integer radix)
-    (cond ((< integer (expt 2 32)) `(:u32 ,integer ,radix))
-          ((< integer (expt 2 64)) `(:u64 ,integer ,radix))
-          ((< integer (expt 2 128)) `(:u128 ,integer ,radix))
-          (t `(:bigint ,integer ,radix))))
+                (cond ((< integer (expt 2 32)) `(:u32 ,integer ,radix))
+                      ((< integer (expt 2 64)) `(:u64 ,integer ,radix))
+                      ((< integer (expt 2 128)) `(:u128 ,integer ,radix))
+                      (t `(:bigint ,integer ,radix))))
   (:destructure (type value base &bounds start end)
-    (make-qly-unsigned :start start
-                       :end end
-                       :value value
-                       :type type
-                       :base base)))
+                (make-qly-unsigned :start start
+                                   :end end
+                                   :value value
+                                   :type type
+                                   :base base)))
 
 (defrule qly-symbol (+ symbol-char)
   (:lambda (list &bounds start end)
@@ -196,10 +217,10 @@
 
 (defrule call-exp (and mexp qly-array)
   (:destructure (value args &bounds start end)
-    (make-call-exp :start start
-                   :end end
-                   :value value
-                   :args args)))
+                (make-call-exp :start start
+                               :end end
+                               :value value
+                               :args args)))
 
 (defrule quote-exp (and "'" (? whitespace) mexp)
   (:function third)
@@ -222,21 +243,12 @@
                      :end end
                      :value exp)))
 
-(defrule qly-comment (and "#" (* (not #\newline)) #\newline)
-  (:constant nil))
-
 (defrule qly-array (and "[" mexp* "]")
   (:destructure (p1 mexp* p2 &bounds start end)
-    (declare (ignore p1 p2))
-    (make-qly-array :start start
-                    :end end
-                    :value mexp*)))
-
-(defrule mexp-or-comment (and (? whitespace) (or mexp qly-comment))
-  (:function second))
-
-(defrule mexp* (and (* mexp-or-comment) (? whitespace))
-  (:function car))
+                (declare (ignore p1 p2))
+                (make-qly-array :start start
+                                :end end
+                                :value mexp*)))
 
 ;;; Debug print
 
