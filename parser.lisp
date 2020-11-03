@@ -263,41 +263,6 @@
       (let ((*print-base* (qly-unsigned-base object)))
         (princ (qly-unsigned-value object) stream))))
 
-(defmethod print-object :around ((object qly-array) stream)
-  (if *print-readably*
-      (call-next-method)
-      (format stream "#~a" (qly-array-value object))))
-
-(defmethod print-object :around ((object quote-exp) stream)
-  (if *print-readably*
-      (call-next-method)
-      (format stream "(' ~a)" (quote-exp-value object))))
-
-(defmethod print-object :around ((object splice-exp) stream)
-  (if *print-readably*
-      (call-next-method)
-      (format stream "(@ ~a)" (splice-exp-value object))))
-
-(defmethod print-object :around ((object unquote-exp) stream)
-  (if *print-readably*
-      (call-next-method)
-      (format stream "(, ~a)" (unquote-exp-value object))))
-
-(defmethod print-object :around ((object dot-exp) stream)
-  (if *print-readably*
-      (call-next-method)
-      (format stream "(. ~a ~a)" (dot-exp-value object) (dot-exp-prop object))))
-
-(defmethod print-object :around ((object call-exp) stream)
-  (if *print-readably*
-      (call-next-method)
-      (format stream "(~a ~{~a~^ ~})" (call-exp-value object) (qly-array-value (call-exp-args object)))))
-
-(defmethod print-object :around ((object colon-exp) stream)
-  (if *print-readably*
-      (call-next-method)
-      (format stream "(: ~a ~a)" (colon-exp-value object) (colon-exp-colon object))))
-
 (defmethod print-object :around ((object qly-ast) stream)
   (if *print-readably*
       (call-next-method)
@@ -332,8 +297,7 @@
        (debug-print-mexp* text (list (dot-exp-value mexp) (dot-exp-prop mexp)) stream last-end last-bracket-col col))
      (princ "]" stream)
      (incf col)
-     (pop last-bracket-col)
-     )
+     (pop last-bracket-col))
     (call-exp
      (multiple-value-setq (last-end last-bracket-col col)
        (debug-print-mexp text (call-exp-value mexp) stream last-end last-bracket-col col))
