@@ -28,7 +28,8 @@
    :qly-integer-p :qly-integer-value :qly-integer-type
    :qly-symbol-p :qly-symbol-value
 
-   :debug-print))
+   :to-sexp
+   :format-print))
 (in-package :qly.parser)
 
 (defun parse-qly-file (filepath)
@@ -245,44 +246,60 @@
 
 (defrule qly-array (and "[" mexp* "]")
   (:destructure (p1 mexp* p2 &bounds start end)
-                (declare (ignore p1 p2))
-                (make-qly-array :start start
-                                :end end
-                                :value mexp*)))
+    (declare (ignore p1 p2))
+    (make-qly-array :start start
+                    :end end
+                    :value mexp*)))
 
-;;; Debug print
+;;; Debug util
 
-(defmethod print-object :around ((object mexp) stream)
-  (if *print-readably*
-      (call-next-method)
-      (princ (mexp-value object) stream)))
+(defgeneric to-sexp (qly-obj))
 
-(defmethod print-object :around ((object qly-unsigned) stream)
-  (if *print-readably*
-      (call-next-method)
-      (let ((*print-base* (qly-unsigned-base object)))
-        (princ (qly-unsigned-value object) stream))))
+(defmethod to-sexp ((obj qly-ast))
+  (mapcar 'to-sexp (qly-ast-mexp* obj)))
 
-(defmethod print-object :around ((object qly-ast) stream)
-  (if *print-readably*
-      (call-next-method)
-      (debug-print object stream)))
+(defmethod to-sexp ((obj dot-exp))
+  (append '(\.) (to-sexp (dot-exp-value obj))
+          (to-sexp (dot-exp-prop obj))))
 
-(defun debug-print (qly-ast stream)
-  (debug-print-mexp* (qly-ast-text qly-ast) (qly-ast-mexp* qly-ast) stream 0 (list -1) 0))
+(defmethod to-sexp ((obj colon-exp))
+  (append '(\:) (to-sexp (colon-exp-value obj))
+          (to-sexp (colon-exp-colon obj))))
 
-(defun debug-print-mexp* (text mexp* stream last-end last-bracket-col col)
+(defmethod to-sexp ((obj call-exp))
+  (append (to-sexp (call-exp-value obj))
+          (mapcar 'to-sexp (call-exp-args obj))))
+
+(defmethod to-sexp ((obj quote-exp))
+  (append '(\') (to-sexp (quote-exp-value obj))))
+
+(defmethod to-sexp ((obj unquote-exp))
+  (append '(\,) (to-sexp (unquote-exp-value obj))))
+
+(defmethod to-sexp ((obj splice-exp))
+  (append '(@) (to-sexp (splice-exp-value obj))))
+
+(defmethod to-sexp ((obj qly-array))
+  (append '(array) (mapcar 'to-sexp (qly-array-value obj))))
+
+(defmethod to-sexp ((obj qly-atom))
+  (qly-atom-value obj))
+
+(defun format-print (qly-ast stream)
+  (format-print-mexp* (qly-ast-text qly-ast) (qly-ast-mexp* qly-ast) stream 0 (list -1) 0))
+
+(defun format-print-mexp* (text mexp* stream last-end last-bracket-col col)
   (when mexp*
     (multiple-value-setq (last-end last-bracket-col col)
-      (debug-print-mexp text (car mexp*) stream last-end last-bracket-col col))
+      (format-print-mexp text (car mexp*) stream last-end last-bracket-col col))
     (when (cdr mexp*)
       (princ " " stream)
       (incf col)
       (multiple-value-setq (last-end last-bracket-col col)
-        (debug-print-mexp* text (cdr mexp*) stream last-end last-bracket-col col))))
+        (format-print-mexp* text (cdr mexp*) stream last-end last-bracket-col col))))
   (values last-end last-bracket-col col))
 
-(defun debug-print-mexp (text mexp stream last-end last-bracket-col col)
+(defun format-print-mexp (text mexp stream last-end last-bracket-col col)
   (when-let (last-newline (search (string #\newline) text :start2 last-end :end2 (mexp-start mexp)))
     (setf last-end (1+ last-newline))
     (terpri stream)
@@ -294,21 +311,21 @@
      (incf col 2)
      (push (1- col) last-bracket-col)
      (multiple-value-setq (last-end last-bracket-col col)
-       (debug-print-mexp* text (list (dot-exp-value mexp) (dot-exp-prop mexp)) stream last-end last-bracket-col col))
+       (format-print-mexp* text (list (dot-exp-value mexp) (dot-exp-prop mexp)) stream last-end last-bracket-col col))
      (princ "]" stream)
      (incf col)
      (pop last-bracket-col))
     (call-exp
      (multiple-value-setq (last-end last-bracket-col col)
-       (debug-print-mexp text (call-exp-value mexp) stream last-end last-bracket-col col))
+       (format-print-mexp text (call-exp-value mexp) stream last-end last-bracket-col col))
      (multiple-value-setq (last-end last-bracket-col col)
-       (debug-print-mexp text (call-exp-args mexp) stream last-end last-bracket-col col)))
+       (format-print-mexp text (call-exp-args mexp) stream last-end last-bracket-col col)))
     (qly-array
      (princ "[" stream)
      (push col last-bracket-col)
      (incf col)
      (multiple-value-setq (last-end last-bracket-col col)
-       (debug-print-mexp* text (qly-array-value mexp) stream last-end last-bracket-col col))
+       (format-print-mexp* text (qly-array-value mexp) stream last-end last-bracket-col col))
      (princ "]" stream)
      (incf col)
      (pop last-bracket-col))
@@ -317,7 +334,7 @@
      (incf col 2)
      (push (1- col) last-bracket-col)
      (multiple-value-setq (last-end last-bracket-col col)
-       (debug-print-mexp text (quote-exp-value mexp) stream last-end last-bracket-col col))
+       (format-print-mexp text (quote-exp-value mexp) stream last-end last-bracket-col col))
      (princ "]" stream)
      (incf col)
      (pop last-bracket-col))
@@ -326,7 +343,7 @@
      (incf col 2)
      (push (1- col) last-bracket-col)
      (multiple-value-setq (last-end last-bracket-col col)
-       (debug-print-mexp text (unquote-exp-value mexp) stream last-end last-bracket-col col))
+       (format-print-mexp text (unquote-exp-value mexp) stream last-end last-bracket-col col))
      (princ "]" stream)
      (incf col)
      (pop last-bracket-col))
@@ -335,7 +352,7 @@
      (incf col 2)
      (push (1- col) last-bracket-col)
      (multiple-value-setq (last-end last-bracket-col col)
-       (debug-print-mexp text (splice-exp-value mexp) stream last-end last-bracket-col col))
+       (format-print-mexp text (splice-exp-value mexp) stream last-end last-bracket-col col))
      (princ "]" stream)
      (incf col)
      (pop last-bracket-col))
@@ -344,7 +361,7 @@
      (incf col 2)
      (push (1- col) last-bracket-col)
      (multiple-value-setq (last-end last-bracket-col col)
-       (debug-print-mexp* text (list (colon-exp-value mexp) (colon-exp-colon mexp)) stream last-end last-bracket-col col))
+       (format-print-mexp* text (list (colon-exp-value mexp) (colon-exp-colon mexp)) stream last-end last-bracket-col col))
      (princ "]" stream)
      (incf col)
      (pop last-bracket-col))
