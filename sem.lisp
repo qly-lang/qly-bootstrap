@@ -2,7 +2,7 @@
 (defpackage :qly.sem
   (:use :cl :qly.parser)
   (:import-from :trivia :match)
-  (:inport-from :alexandria :if-let :when-let))
+  (:import-from :alexandria :if-let :when-let))
 (in-package :qly.sem)
 
 ;;; Chain of environment
@@ -360,8 +360,8 @@
      (loop for mexp in mexp*
            do (resolve-var-mexp mexp scopes (gethash fname scopes) quote)))
     ((call-exp :value (qly-symbol :value :|v|)
-               (qly-array :value
-                          (list _ value)))
+               :args (qly-array :value
+                                (list _ value)))
      (resolve-var-mexp mexp scopes scope quote))
     ;; TODO: more builtin special ops and fs
 
