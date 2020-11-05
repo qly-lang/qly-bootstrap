@@ -24,7 +24,7 @@
    :qly-atom-p :qly-atom-value
    :qly-string-p :qly-string-value
    :qly-real-p :qly-real-value :qly-real-type
-   :qly-unsigned-p :qly-unsigned-value :qly-unsigned-base :qly-unsigned-base
+   :qly-unsigned-p :qly-unsigned-value :qly-unsigned-base :qly-unsigned-type
    :qly-integer-p :qly-integer-value :qly-integer-type
    :qly-symbol-p :qly-symbol-value
 
@@ -166,22 +166,22 @@
                                (and "0b" (+ bin-char)))
                            (! symbol-char))
   (:lambda (list)
-    (let ((radix (case (aref (first list) 1)
+    (let ((radix (case (aref (caar list) 1)
                    (#\x 16)
                    (#\o 8)
                    (#\b 2))))
-      (list (parse-integer (text list) :radix radix) radix)))
+      (list (parse-integer (text (cdar list)) :radix radix) radix)))
   (:destructure (integer radix)
-                (cond ((< integer (expt 2 32)) `(:u32 ,integer ,radix))
-                      ((< integer (expt 2 64)) `(:u64 ,integer ,radix))
-                      ((< integer (expt 2 128)) `(:u128 ,integer ,radix))
-                      (t `(:bigint ,integer ,radix))))
+    (cond ((< integer (expt 2 32)) `(:u32 ,integer ,radix))
+          ((< integer (expt 2 64)) `(:u64 ,integer ,radix))
+          ((< integer (expt 2 128)) `(:u128 ,integer ,radix))
+          (t `(:bigunsigned ,integer ,radix))))
   (:destructure (type value base &bounds start end)
-                (make-qly-unsigned :start start
-                                   :end end
-                                   :value value
-                                   :type type
-                                   :base base)))
+    (make-qly-unsigned :start start
+                       :end end
+                       :value value
+                       :type type
+                       :base base)))
 
 (defrule qly-symbol (+ symbol-char)
   (:lambda (list &bounds start end)
