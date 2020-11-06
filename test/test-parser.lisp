@@ -82,3 +82,15 @@
   (qly-is '(1.5) (parse-qly-text "0.15e+1"))
   (qly-is '(1.5) (parse-qly-text "150.0e-2"))
   (qly-is '(1.5) (parse-qly-text "150e-2")))
+
+(test parse-string
+  (qly-is '("a") (parse-qly-text "\"a\""))
+  (qly-is '("ab") (parse-qly-text "\"ab\""))
+  (qly-is '("a
+b") (parse-qly-text "\"a
+b\""))
+  (qly-is '("a\"") (parse-qly-text (string '|"a\\""|)))
+  (qly-is '("an") (parse-qly-text (string '|"a\\n"|)))
+  (qly-is '("") (parse-qly-text (string '|""|)))
+  (signals esrap:esrap-parse-error (parse-qly-text (string '|aa"|)))
+  (signals esrap:esrap-parse-error (parse-qly-text (string '|"aaa|))))

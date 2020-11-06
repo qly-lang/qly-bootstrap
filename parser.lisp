@@ -73,7 +73,7 @@
   (member char '(#\. #\[ #\: #\] #\" #\\ #\' #\, #\@ #\# )))
 
 (defun raw-symbol-char-p (char)
-  (and (not (whitespace-char char)) (not (rule-char char))))
+  (and (not (whitespace-char-p char)) (not (rule-char-p char))))
 
 (defun bin-char-p (char)
   (digit-char-p char 2))
@@ -86,9 +86,12 @@
 
 ;;; Utility rules
 
-(defrule string-char (or (and #\\ character) (not-doublequote character)))
+(defrule escape-char (and #\\ character)
+  (:function second))
 
-(defrule symbol-char (or (and #\\ character) (raw-symbol-char character)))
+(defrule string-char (or escape-char not-doublequote))
+
+(defrule symbol-char (or escape-char raw-symbol-char))
 
 (defrule digit-char (digit-char-p character))
 
