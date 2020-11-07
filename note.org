@@ -1,0 +1,7 @@
+- because of esrap parser is bottom up, it's not easy to validate quote-unquote levels correct, postpone validation to semantic analysis pass. In short, following should hold:
+  - quote level should always ~>= 0~
+  - splice must inside an array
+  - if there is also quote and unquote in array, (when calculating quote level after apply splice), quote level after array must be negative. E.g.:
+    - ~'(@a)~ ok, quote level after array is ~-1~
+    - ~''(,@a)~ ok, quote level after array is ~-2~
+    - ~'('@a)~ not ok, quote level after array is ~0~

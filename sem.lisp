@@ -2,8 +2,20 @@
 (defpackage :qly.sem
   (:use :cl :qly.parser)
   (:import-from :trivia :match)
-  (:import-from :alexandria :if-let :when-let))
+  (:import-from :alexandria :if-let :when-let)
+  (:export
+   :semantic-error
+   :unquote-out-of-quote
+   :splice-out-of-quote
+   :splice-out-of-array))
 (in-package :qly.sem)
+
+;;; Semantic errors
+
+(define-condition semantic-error (error) ())
+(define-condition unquote-out-of-quote (semantic-error) ())
+(define-condition splice-out-of-quote (semantic-error) ())
+(define-condition splice-out-of-array (semantic-error) ())
 
 ;;; Chain of environment
 

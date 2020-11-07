@@ -94,3 +94,49 @@ b\""))
   (qly-is '("") (parse-qly-text (string '|""|)))
   (signals esrap:esrap-parse-error (parse-qly-text (string '|aa"|)))
   (signals esrap:esrap-parse-error (parse-qly-text (string '|"aaa|))))
+
+(test parse-atom
+  (qly-is '(:|a|) (parse-qly-text "a"))
+  (qly-is '(:|1a|) (parse-qly-text "1a"))
+  ;; These (dot with number literal) operations are not recommended as they are hard
+  ;; to reason. But at least they should not error
+  (qly-is '((:\. 1 :|3a|)) (parse-qly-text "1 . 3a"))
+  (qly-is '((:\. :|1| :|3a|)) (parse-qly-text "1.3a"))
+  (qly-is '(:|1e2e3|) (parse-qly-text "1e2e3"))
+  (qly-is '(:|15e-2x|) (parse-qly-text "15e-2x"))
+  (qly-is '((:|.| :|1| :|5e-2x|)) (parse-qly-text "1.5e-2x"))
+
+  (qly-is '(:-) (parse-qly-text "-"))
+  (qly-is '(:1) (parse-qly-text "\\1"))
+  (qly-is '(:1.5\e2) (parse-qly-text "\\1\\.5e2"))
+  (qly-is '(:|a| :|bbb|) (parse-qly-text "a bbb"))
+  (qly-is '(:|a bbb|) (parse-qly-text "a\\ bbb"))
+  (qly-is '(:|a
+b|) (parse-qly-text "a\\
+b"))
+  (qly-is '(:|a#b|) (parse-qly-text "a\\#b"))
+  (qly-is '(:|,.'|) (parse-qly-text "\\,\\.\\'")))
+
+(def-suite parse-mexp)
+(in-suite parse-mexp)
+
+(test parse-comment
+  (qly-is '() (parse-qly-text "#"))
+  (qly-is '() (parse-qly-text "#aaaa"))
+  (qly-is '(3) (parse-qly-text "#aaaa
+3"))
+  (qly-is '(3) (parse-qly-text "3 #aaaa"))
+  (qly-is '(3 4) (parse-qly-text "3#aaaa
+4"))
+  (qly-is '("aaa#aaa") (parse-qly-text "\"aaa#aaa\""))
+  (qly-is '("aaa") (parse-qly-text "\"aaa\"#bbb")))
+
+(test parse-quote-unquote-splice
+  (qly-is '((:\' :|aaa|)) (parse-qly-text "'aaa"))
+  (qly-is '((:\' (:\' :|aaa|))) (parse-qly-text "''aaa"))
+  (signals esrap:esrap-parse-error (parse-qly-text "'"))
+  (qly-is '((:\' (:\, :|aaa|))) (parse-qly-text "',aaa"))
+  (qly-is '((:\' (:@ (:array :|aaa|)))) (parse-qly-text "'@[aaa]")))
+
+(test parse-dot-exp
+  )

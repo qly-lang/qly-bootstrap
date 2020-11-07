@@ -262,28 +262,28 @@
   (mapcar 'to-sexp (qly-ast-mexp* obj)))
 
 (defmethod to-sexp ((obj dot-exp))
-  (append '(\.) (to-sexp (dot-exp-value obj))
-          (to-sexp (dot-exp-prop obj))))
+  (list :\. (to-sexp (dot-exp-value obj))
+        (to-sexp (dot-exp-prop obj))))
 
 (defmethod to-sexp ((obj colon-exp))
-  (append '(\:) (to-sexp (colon-exp-value obj))
-          (to-sexp (colon-exp-colon obj))))
+  (list :\: (to-sexp (colon-exp-value obj))
+        (to-sexp (colon-exp-colon obj))))
 
 (defmethod to-sexp ((obj call-exp))
-  (append (to-sexp (call-exp-value obj))
-          (mapcar 'to-sexp (call-exp-args obj))))
+  (list (to-sexp (call-exp-value obj))
+        (mapcar 'to-sexp (call-exp-args obj))))
 
 (defmethod to-sexp ((obj quote-exp))
-  (append '(\') (to-sexp (quote-exp-value obj))))
+  (list :\' (to-sexp (quote-exp-value obj))))
 
 (defmethod to-sexp ((obj unquote-exp))
-  (append '(\,) (to-sexp (unquote-exp-value obj))))
+  (list :\, (to-sexp (unquote-exp-value obj))))
 
 (defmethod to-sexp ((obj splice-exp))
-  (append '(@) (to-sexp (splice-exp-value obj))))
+  (list :@ (to-sexp (splice-exp-value obj))))
 
 (defmethod to-sexp ((obj qly-array))
-  (append '(array) (mapcar 'to-sexp (qly-array-value obj))))
+  (cons :array (mapcar 'to-sexp (qly-array-value obj))))
 
 (defmethod to-sexp ((obj qly-atom))
   (qly-atom-value obj))
