@@ -131,6 +131,14 @@ b"))
   (qly-is '("aaa#aaa") (parse-qly-text "\"aaa#aaa\""))
   (qly-is '("aaa") (parse-qly-text "\"aaa\"#bbb")))
 
+(test parse-array
+  (qly-is '((:array)) (parse-qly-text "[]"))
+  (qly-is '((:array :|a| 1)) (parse-qly-text "[ a 1]"))
+  (qly-is '((:array :|a| 1)) (parse-qly-text "[ a 1 ]"))
+  (qly-is '((:array :|a| 1)) (parse-qly-text "[a 1 ]"))
+  (qly-is '((:array :|a| 1)) (parse-qly-text "[a 1]"))
+  (qly-is '((:array (:array :|a|) 1)) (parse-qly-text "[[a] 1]")))
+
 (test parse-quote-unquote-splice
   (qly-is '((:\' :|aaa|)) (parse-qly-text "'aaa"))
   (qly-is '((:\' (:\' :|aaa|))) (parse-qly-text "''aaa"))
@@ -165,3 +173,17 @@ b"))
              (:|:| (:|foo| (:|:| :|a| :|int|) (:|:| :|b| (:|array| :|string|)))
               :|type-a|)))
           (parse-qly-text "f[foo[a:int b:array[string]]:type-a]")))
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (set-dispatch-macro-character #\# #\" 'let-over-lambda:|#"-reader|))
+
+(test parse-mexps
+  (qly-is
+   '((:|a|)
+     (:|b|)
+     (:\. :|c| :|d|))
+
+   (parse-qly-text
+    #"a[]
+b[]
+c.d"#)))

@@ -4,12 +4,15 @@
 mexp* := (and (? whitespace) (* mexp-whitespace))
 mexp-whitespace := (and mexp (? whitespace))
 whitespace := (+ (or qly-comment whitespace-char))
-mexp := (or dot-exp colon-exp call-exp
-            quote-exp unquote-exp splice-exp
-            qly-array qly-atom)
+mexp := colon-exp-and-higher
 qly-comment := (and "#" (* (not "\n")) (or "\n" eof))
 whitespace-char := (or " " "\t" "\n")
 eof := (! character)
+
+colon-exp-and-higher := (or colon-exp call-dot-exp-and-higher)
+call-dot-exp-and-higher := (or call-or-dot-exp primary-exp)
+call-or-dot-exp := (or call-exp dot-exp)
+primary-exp := (or quote-exp unquote-exp splice-exp qly-array qly-atom)
 
 dot-exp := (and mexp-except-colon (? whitespace) "." (? whitespace) mexp-except-colon-dot-call)
 colon-exp := (and mexp-except-colon (? whitespace) ":" (? whitespace) mexp-except-colon)

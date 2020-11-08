@@ -197,16 +197,13 @@
 (defrule mexp colon-exp-and-higher)
 
 (defrule colon-exp-and-higher
-    (or colon-exp
-        call-dot-exp-and-higher))
+    (or colon-exp call-dot-exp-and-higher))
 
 (defrule call-dot-exp-and-higher
-    (or call-or-dot-exp
-        primary-exp))
+    (or call-or-dot-exp primary-exp))
 
 (defrule primary-exp
-    (or quote-exp unquote-exp splice-exp
-        qly-array qly-atom))
+    (or quote-exp unquote-exp splice-exp qly-array qly-atom))
 
 (defrule call-or-dot-exp (or call-exp dot-exp))
 

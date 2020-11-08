@@ -1,7 +1,9 @@
 * DONE print with newline <2020-06-19 Fri>
-* TODO parser tests
+* DONE parser tests <2020-11-08 Sun>
   SCHEDULED: <2020-06-20 Sat>
-* type analysis
-* var refer to
-* semantic error check
+* TODO type and semantic analysis stage 1
+** no inference type analysis
+** var refer to
+** type error check
+** type analysis tests
 * first interpreter

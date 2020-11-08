@@ -6,6 +6,7 @@
   :license "BSD"
   :version "0.0.1"
   :serial t
+  :in-order-to ((test-op (test-op qly-test)))
   :depends-on (:alexandria
                :trivia
                :esrap
