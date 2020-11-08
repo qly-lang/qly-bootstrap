@@ -194,37 +194,49 @@
 
 ;;; Expressions
 
-(defrule mexp (or dot-exp colon-exp call-exp
-                  quote-exp unquote-exp splice-exp
-                  qly-array qly-atom))
+(defrule mexp colon-exp-and-higher)
 
-(defrule mexp-except-colon (or dot-exp call-exp quote-exp unquote-exp splice-exp qly-array qly-atom))
+(defrule colon-exp-and-higher
+    (or colon-exp
+        call-dot-exp-and-higher))
 
-(defrule mexp-except-colon-dot (or call-exp quote-exp unquote-exp splice-exp
-                                   qly-array qly-atom))
+(defrule call-dot-exp-and-higher
+    (or call-or-dot-exp
+        primary-exp))
 
-(defrule dot-exp (and mexp-except-colon (? whitespace) "." (? whitespace)
-                      mexp-except-colon-dot)
+(defrule primary-exp
+    (or quote-exp unquote-exp splice-exp
+        qly-array qly-atom))
+
+(defrule call-or-dot-exp (or call-exp dot-exp))
+
+(defrule mexp-except-colon (or call-or-dot-exp quote-exp unquote-exp splice-exp qly-array qly-atom))
+
+(defrule mexp-except-colon-dot-call (or quote-exp unquote-exp splice-exp
+                                        qly-array qly-atom))
+
+(defrule dot-exp (and call-dot-exp-and-higher (? whitespace) "." (? whitespace)
+                      primary-exp)
   (:destructure (value w d w prop &bounds start end)
     (make-dot-exp :start start
                   :end end
                   :value value
                   :prop prop)))
 
-(defrule colon-exp (and mexp-except-colon (? whitespace) ":" (? whitespace)
-                        mexp-except-colon)
+(defrule call-exp (and call-dot-exp-and-higher qly-array)
+  (:destructure (value args &bounds start end)
+    (make-call-exp :start start
+                   :end end
+                   :value value
+                   :args args)))
+
+(defrule colon-exp (and call-dot-exp-and-higher (? whitespace) ":" (? whitespace)
+                        colon-exp-and-higher)
   (:destructure (value w c w colon &bounds start end)
     (make-colon-exp :start start
                     :end end
                     :value value
                     :colon colon)))
-
-(defrule call-exp (and mexp qly-array)
-  (:destructure (value args &bounds start end)
-                (make-call-exp :start start
-                               :end end
-                               :value value
-                               :args args)))
 
 (defrule quote-exp (and "'" (? whitespace) mexp)
   (:function third)
@@ -270,8 +282,8 @@
         (to-sexp (colon-exp-colon obj))))
 
 (defmethod to-sexp ((obj call-exp))
-  (list (to-sexp (call-exp-value obj))
-        (mapcar 'to-sexp (call-exp-args obj))))
+  (cons (to-sexp (call-exp-value obj))
+        (mapcar 'to-sexp (qly-array-value (call-exp-args obj)))))
 
 (defmethod to-sexp ((obj quote-exp))
   (list :\' (to-sexp (quote-exp-value obj))))

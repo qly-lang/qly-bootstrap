@@ -11,7 +11,7 @@ qly-comment := (and "#" (* (not "\n")) (or "\n" eof))
 whitespace-char := (or " " "\t" "\n")
 eof := (! character)
 
-dot-exp := (and mexp-except-colon (? whitespace) "." (? whitespace) mexp-except-colon-dot)
+dot-exp := (and mexp-except-colon (? whitespace) "." (? whitespace) mexp-except-colon-dot-call)
 colon-exp := (and mexp-except-colon (? whitespace) ":" (? whitespace) mexp-except-colon)
 call-exp := (and mexp qly-array)
 quote-exp := (and "'" (? whitespace) mexp)
@@ -21,7 +21,7 @@ qly-array := (and "[" mexp* "]")
 qly-atom := (or qly-string qly-real qly-unsigned qly-integer qly-symbol)
 
 mexp-except-colon (or dot-exp call-exp quote-exp unquote-exp splice-exp qly-array qly-atom)
-mexp-except-colon-dot (or call-exp quote-exp unquote-exp splice-exp qly-array qly-atom)
+mexp-except-colon-dot-call (or quote-exp unquote-exp splice-exp qly-array qly-atom)
 
 qly-string := (and #\" (* string-char) #\")
 qly-real := (and (? (or "+" "-"))

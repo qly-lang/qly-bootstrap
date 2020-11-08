@@ -139,4 +139,29 @@ b"))
   (qly-is '((:\' (:@ (:array :|aaa|)))) (parse-qly-text "'@[aaa]")))
 
 (test parse-dot-exp
-  )
+  (qly-is '((:\. :|aaa| :|bbb|)) (parse-qly-text "aaa.bbb"))
+  (qly-is '((:\. :|aaa| :|bbb|)) (parse-qly-text "aaa. bbb"))
+  (qly-is '((:\. :|aaa| :|bbb|)) (parse-qly-text "aaa .bbb"))
+  (qly-is '((:\. :|aaa| :|bbb|)) (parse-qly-text "aaa . bbb"))
+  (qly-is '((:\. (:\. :|aaa| :|bbb|) :|ccc|)) (parse-qly-text "aaa.bbb.ccc"))
+  (qly-is '((:\. ((:\. :|a| :|b|)) :|c|)) (parse-qly-text "a.b[].c"))
+  (qly-is '((:\. ((:\. :|aaa| :|bbb|) :|x| (:\. :|y| :|ddd|)) :|ccc|)) (parse-qly-text "aaa.bbb[x y.ddd].ccc"))
+  (qly-is '(((:|.| (((:|.| :|a| :|b|) :|d| :|e|) :|x|) :|f|))) (parse-qly-text "a.b[d e][x].f[]"))
+  (qly-is '((:\. :|aaa| :|b|) :|ccc|) (parse-qly-text "aaa.b ccc")))
+
+(test parse-call-exp
+  (qly-is '((:|a| :|b| :|c| 3 "str")) (parse-qly-text "a[b c 3 \"str\"]"))
+  (qly-is '((:|a|)) (parse-qly-text "a[]"))
+  (qly-is '(((:|a| :|b| :|c|) :|d|)) (parse-qly-text "a[b c][d]")))
+
+(test parse-colon-exp
+  (qly-is '((:|:| :|a| :|b|)) (parse-qly-text "a:b"))
+  (qly-is '((:|:| :|a| (:|:| :|b| :|c|))) (parse-qly-text "a:b:c"))
+  (qly-is '((:|:| (:\. :|a| :|b|) :|c|)) (parse-qly-text "a.b:c"))
+  (qly-is '((:|:| :|a| (:\. :|b| :|c|))) (parse-qly-text "a:b.c"))
+  (qly-is '((:|:| :|a| (:|b|))) (parse-qly-text "a:b[]"))
+  (qly-is '((:|:| (:|a|) :|b|)) (parse-qly-text "a[]:b"))
+  (qly-is '((:|f|
+             (:|:| (:|foo| (:|:| :|a| :|int|) (:|:| :|b| (:|array| :|string|)))
+              :|type-a|)))
+          (parse-qly-text "f[foo[a:int b:array[string]]:type-a]")))
