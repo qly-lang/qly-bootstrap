@@ -2,8 +2,25 @@
 * DONE parser tests <2020-11-08 Sun>
   SCHEDULED: <2020-06-20 Sat>
 * TODO type and semantic analysis stage 1
-** no inference type analysis
-** var refer to
-** type error check
-** type analysis tests
+** TODO no inference type analysis
+** TODO var refer to
+** TODO type error check
+** TODO type analysis tests
 * first interpreter
+* first compiler, llvm target
+* enough lib for self bootstrap
+
+* stage 2 tasks
+** type inference
+** more language features, error handling
+** more language libs
+** protocol type, type inference for protocol type
+** coolgates backend
+** self bootstrap
+
+* stage 3 tasks
+** documentation
+** editor support
+** profiler, debugger
+** mid-end optimizations
+** coolgate-gpgpu and coolgate-quantum

@@ -28,6 +28,7 @@
    :qly-integer-p :qly-integer-value :qly-integer-type
    :qly-symbol-p :qly-symbol-value
 
+   :position-to-line-col
    :to-sexp
    :format-print))
 (in-package :qly.parser)
@@ -39,9 +40,45 @@
 
 (defun parse-qly-text (text)
   (make-qly-ast :mexp* (parse 'mexp* text)
-                :text text))
+                :text text
+                :newlines (text-newlines text)))
 
-(defstruct qly-ast path mexp* text)
+(defun text-newlines (text)
+  (let ((r (list -1)))
+    (loop (let ((pos (position #\newline text :start
+                               (1+ (car r)))))
+            (if pos
+                (push pos r)
+                (return (map 'vector 'identity (nreverse (cons (length text) r)))))))))
+
+(defun position-to-line-col (ast pos)
+  (let ((line (binary-search pos (qly-ast-newlines ast) :test #'>=)))
+    (if line
+        (values line (- pos (elt (qly-ast-newlines ast) (1- line))))
+        (values nil nil))))
+
+(defun binary-search (item sequence &key (predicate #'<) (test #'=))
+  (when (plusp (length sequence))
+    (loop
+      with l = 0
+      and  r = (1- (length sequence))
+
+      for m   = (floor (+ l r) 2)
+      for mth = (elt sequence m)
+
+      if (funcall predicate mth item)
+        do (setf l m)
+      else
+        do (setf r m)
+
+      until (<= (- r l) 1)
+      finally (progn (print l) (print r) (print '-----)(return
+                                                         (cond
+                                                           ((funcall test (elt sequence l) item) l)
+                                                           ((funcall test (elt sequence r) item) r)
+                                                           (t                                    nil)))))))
+
+(defstruct qly-ast path mexp* text newlines)
 (defstruct mexp start end value)
 
 ;;; Possible mexp:

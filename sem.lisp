@@ -2,12 +2,24 @@
 (defpackage :qly.sem
   (:use :cl :qly.parser)
   (:import-from :trivia :match)
-  (:import-from :alexandria :if-let :when-let)
+  (:import-from :alexandria :if-let :when-let :hash-table-keys :hash-table-alist)
   (:export
    :semantic-error
    :unquote-out-of-quote
    :splice-out-of-quote
-   :splice-out-of-array))
+   :splice-out-of-array
+
+   :qly-sem-qly-ast
+   :qly-sem-var-defs ; to delete
+   :qly-sem-scopes
+   :scope-var-defs
+   :analyze-type
+   :resolve-var
+   :make-qly-sem
+   :var-def-type
+   :array-type
+   :make-array-type
+   :array-type-elem-type))
 (in-package :qly.sem)
 
 ;;; Semantic errors
@@ -24,6 +36,22 @@
   (%env (make-hash-table :test #'equal))
   %parent)
 
+(defmethod print-object :around ((object env-chain) stream)
+  (if *print-readably*
+      (call-next-method)
+      (debug-print-env-chain object stream)))
+
+(defun debug-print-env-chain (env-chain stream)
+  (pprint-logical-block (stream (hash-table-alist (env-chain-%env env-chain)))
+    (pprint-exit-if-list-exhausted)
+    (loop (let ((kv (pprint-pop)))
+            (format stream "~a: ~a" (car kv)
+                    (etypecase (cdr kv)
+                      (var-def (var-def-type (cdr kv)))
+                      (type-def (or (type-def-def (cdr kv)) "<builtin>"))))
+            (pprint-exit-if-list-exhausted)
+            (pprint-newline :mandatory stream)))))
+
 (defun lookup/direct (name env)
   (values (gethash name (env-chain-%env env))))
 
@@ -33,7 +61,7 @@
         (lookup name parent))))
 
 (defun lookup-symbol-def (qly-symbol env)
-  (if-let (def (lookup/direct (qly-symbol-value qly-symbol)))
+  (if-let (def (lookup/direct (qly-symbol-value qly-symbol) env))
     (if (> (qly-symbol-start qly-symbol)
            (call-exp-end (var-def-mexp def)))
         def
@@ -47,7 +75,10 @@
 
 ;;; Qly semantic unit
 
-(defstruct qly-sem qly-ast scopes)
+(defstruct (qly-sem
+            (:constructor make-qly-sem (qly-ast)))
+  qly-ast
+  (scopes (make-hash-table :test 'equal)))
 
 (defmethod print-object :around ((object qly-sem) stream)
   (if *print-readably*
@@ -55,22 +86,78 @@
       (debug-print-qly-sem object stream)))
 
 (defmethod debug-print-qly-sem (qly-sem stream)
-  (format stream "AST:~%")
-  (debug-print (qly-sem-qly-ast qly-sem) stream)
-  (format stream "~%~%SCOPES:~%")
+  (format stream "AST:
+----~%")
+  (format-print (qly-sem-qly-ast qly-sem) stream)
+  (format stream "~%~%SCOPES:
+-------~%")
   (loop for key being the hash-keys of (qly-sem-scopes qly-sem)
           using (hash-value value)
-        do (format stream "~S: ~S~%" key value)))
+        do (pprint-logical-block (stream nil)
+             (princ key stream)
+             (write-string ":" stream)
+             (pprint-indent :block 2 stream)
+             (pprint-newline :mandatory stream)
+             (princ value stream))))
 
 (defstruct (scope
             (:constructor %make-scope))
   mexp var-defs var-occurs type-defs type-occurs)
 
+(defmethod print-object :around ((object scope) stream)
+  (if *print-readably*
+      (call-next-method)
+      (debug-print-scope object stream)))
+
+(defun debug-print-scope (scope stream)
+  (pprint-logical-block (stream nil)
+    (when-let (var-defs (hash-table-alist (env-chain-%env (scope-var-defs scope))))
+      (write-string "VAR-DEFS: " stream)
+      (pprint-indent :block 2 stream)
+      (pprint-newline :mandatory stream)
+      (pprint-logical-block (stream var-defs)
+        (pprint-exit-if-list-exhausted)
+        (loop (let ((kv (pprint-pop)))
+                (format stream "~a: ~a" (car kv)
+                        (var-def-type (cdr kv)))
+                (pprint-exit-if-list-exhausted)
+                (pprint-newline :mandatory stream)))))
+
+    (when-let (var-occurs (hash-table-alist (scope-var-occurs scope)))
+      (pprint-indent :block 0 stream)
+      (pprint-newline :mandatory stream)
+      (write-string "VAR-OCCURS: " stream)
+      (pprint-indent :block 2 stream)
+      (pprint-newline :mandatory stream)
+      (pprint-logical-block (stream var-occurs)
+        (pprint-exit-if-list-exhausted)
+        (loop (let* ((kv (pprint-pop))
+                     (line-col (multiple-value-list (position-to-line-col (cdr kv) (mexp-start (cdr kv))))))
+                (format stream "~a: ~a" (car kv)
+                        (format nil "line: ~a, col: ~a" (first line-col) (second line-col)))
+                (pprint-exit-if-list-exhausted)
+                (pprint-newline :mandatory stream)))))
+
+
+    (when-let (type-defs (hash-table-alist (env-chain-%env (scope-type-defs scope))))
+      (pprint-indent :block 0 stream)
+      (pprint-newline :mandatory stream)
+      (write-string "TYPE-DEFS: " stream)
+      (pprint-indent :block 2 stream)
+      (pprint-newline :mandatory stream))
+
+    (when-let (type-occurs (hash-table-alist (scope-type-occurs scope)))
+      (pprint-indent :block 0 stream)
+      (pprint-newline :mandatory stream)
+      (write-string "TYPE-OCCURS: " stream)
+      (pprint-newline :mandatory stream)
+      (pprint-indent :block 2 stream))))
+
 (defstruct var-def mexp type)
 (defstruct occur mexp)
 (defstruct type-def mexp def)
 
-(defvar *builtin-var-defs*
+(defparameter *builtin-var-defs*
   (let ((var-defs (make-env-chain)))
     (setf
      ;;; std primitives
@@ -145,10 +232,11 @@
      (lookup :|++| var-defs) (make-var-def)
      (lookup :|--| var-defs) (make-var-def))
     var-defs))
-(defvar *builtin-type-defs*
+
+(defparameter *builtin-type-defs*
   (let ((type-defs (make-env-chain)))
     (setf (lookup :|symbol| type-defs) (make-type-def)
-          (lookup :|integer| type-defs) (make-type-def)
+          (lookup :|int| type-defs) (make-type-def)
           (lookup :|unsigned| type-defs) (make-type-def)
           (lookup :|i8| type-defs) (make-type-def)
           (lookup :|i16| type-defs) (make-type-def)
@@ -156,6 +244,7 @@
           (lookup :|i64| type-defs) (make-type-def)
           (lookup :|i128| type-defs) (make-type-def)
           (lookup :|bigint| type-defs) (make-type-def)
+          (lookup :|bigunsigned| type-defs) (make-type-def)
           (lookup :|u8| type-defs) (make-type-def)
           (lookup :|u16| type-defs) (make-type-def)
           (lookup :|u32| type-defs) (make-type-def)
@@ -181,8 +270,7 @@
 ;;; Main semantic analysis entry
 
 (defun sem-ast (qly-ast)
-  (let ((qly-sem (make-qly-sem :qly-ast qly-ast
-                               :scopes (make-hash-table :test #'equal))))
+  (let ((qly-sem (make-qly-sem qly-ast)))
     ;; Passes of semantic analysis
     (analyze-type qly-sem)
     (resolve-var qly-sem)
@@ -219,9 +307,9 @@
      ;; type must be defined before, value must compatible with type (check in later pass)
      (call-exp :value (qly-symbol :value :|v|) :args
                (qly-array :value
-                          (list (colon-exp :value (qly-symbol :value var)
-                                           :colon type)
-                                (mexp :value value))))
+                          (list* (colon-exp :value (qly-symbol :value var)
+                                            :colon type)
+                                 _)))
      (setf (lookup var (scope-var-defs scope))
            (make-var-def
             :mexp mexp
@@ -300,8 +388,11 @@
     ((qly-symbol :value symbol)
      (if (lookup-type symbol scope)
          symbol
-         (error "Cannot find type")))
-    ((call-exp :value (qly-symbol :value :|array|) :args (list elem-type))
+         (error "Cannot find type ~a" symbol)))
+    ((qly-array :value (list elem-type))
+     (make-array-type :elem-type (process-type elem-type scope)))
+    ((call-exp :value (qly-symbol :value :|array|)
+               :args (qly-array :value (list elem-type)))
      (make-array-type :elem-type (process-type elem-type scope)))
     ((call-exp :value (qly-symbol :value :|record|) :args field-types)
      (make-record-type :fields (process-field-types field-types scope)))
@@ -363,7 +454,7 @@
        (resolve-var-builtin-fdef call-exp scopes scope quote))
       (t
        (loop for mexp in (qly-array-value (call-exp-args call-exp))
-             do (resolve-var-mexp scopes scope quote))))))
+             do (resolve-var-mexp mexp scopes scope quote))))))
 
 (defun resolve-var-builtin-fdef (call-exp scopes scope quote)
   (match call-exp

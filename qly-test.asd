@@ -12,4 +12,5 @@
   :components ((:module "test"
                 :serial t
                 :components
-                ((:file "test-parser")))))
+                ((:file "test-parser")
+                 (:file "test-sem")))))
