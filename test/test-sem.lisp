@@ -17,14 +17,14 @@
   (when (eql (type-of t1) (type-of t2))
     (typecase t1
       (array-type (type-equal (array-type-elem-type t1) (array-type-elem-type t2)))
-      (record-type (every (lambda (field1 field2)
+      (struct-type (every (lambda (field1 field2)
                             (and
-                             (eql (record-field-name field1)
-                                  (record-field-name field2))
-                             (type-equal (record-field-type field1)
-                                         (record-field-type field2))))
-                          (record-type-fields t1)
-                          (record-type-fields t2)))
+                             (eql (struct-field-name field1)
+                                  (struct-field-name field2))
+                             (type-equal (struct-field-type field1)
+                                         (struct-field-type field2))))
+                          (struct-type-fields t1)
+                          (struct-type-fields t2)))
       (t (equal t1 t2)))))
 
 (test define-vars
@@ -35,7 +35,7 @@ v[y:string]
 v[aaa:array[u32]]
 v[bbb:symbol 'x]"#))))
     (analyze-type sem)
-    (var-def-env-is `((:|x| . :|integer|)
+    (var-def-env-is `((:|x| . :|int|)
                       (:|y| . :|string|)
                       (:|aaa| . ,(make-array-type :elem-type :|u32|))
                       (:|bbb| . :|symbol|))
@@ -58,33 +58,33 @@ v[b:array[[string]]]
                       (:|b| . ,(make-array-type :elem-type (make-array-type :elem-type :|string|))))
                     (scope-var-defs (gethash :root (qly-sem-scopes sem))))))
 
-(test define-records
+(test define-structs
   (let ((sem (make-qly-sem
               (parse-qly-text
-               #"v[x:record[x:string]]
+               #"v[x:struct[x:string]]
 v[y:[y:string]]
 v[z:[x:string y:[y:string] z:[string] a:[[x:string]]]]
 "#))))
     (analyze-type sem)
-    (var-def-env-is `((:|x| . ,(make-record-type :fields (list (make-record-field :name :|x| :type :|string|))))
-                      (:|y| . ,(make-record-type :fields (list (make-record-field :name :|y| :type :|string|))))
-                      (:|z| . ,(make-record-type
+    (var-def-env-is `((:|x| . ,(make-struct-type :fields (list (make-struct-field :name :|x| :type :|string|))))
+                      (:|y| . ,(make-struct-type :fields (list (make-struct-field :name :|y| :type :|string|))))
+                      (:|z| . ,(make-struct-type
                                 :fields
                                 (list
-                                 (make-record-field :name :|x| :type :|string|)
-                                 (make-record-field
+                                 (make-struct-field :name :|x| :type :|string|)
+                                 (make-struct-field
                                   :name :|y|
-                                  :type (make-record-type
+                                  :type (make-struct-type
                                          :fields (list
-                                                  (make-record-field :name :|y| :type :|string|))))
-                                 (make-record-field
+                                                  (make-struct-field :name :|y| :type :|string|))))
+                                 (make-struct-field
                                   :name :|z|
                                   :type (make-array-type :elem-type :|string|))
-                                 (make-record-field
+                                 (make-struct-field
                                   :name :|a|
                                   :type (make-array-type :elem-type
-                                                         (make-record-type
-                                                          :fields (list (make-record-field
+                                                         (make-struct-type
+                                                          :fields (list (make-struct-field
                                                                          :name :|x|
                                                                          :type :|string|)))))))))
                     (scope-var-defs (gethash :root (qly-sem-scopes sem))))))

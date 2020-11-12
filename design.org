@@ -92,8 +92,8 @@ t[atom or[nil bool symbol integer i8 ... i256 unsigned u8 ... u256 real f32 ... 
 
 **** array
 ~array[type]~ denote a dynamic array of type ~type~
-**** record
-~record[field1:type1 field2:type2 ...]~ denote an aggregate record in contiguous memory. It has ~field1~, ~field2~, etc. of ~type1~, ~type2~, etc.
+**** struct
+~struct[field1:type1 field2:type2 ...]~ denote an aggregate struct in contiguous memory. It has ~field1~, ~field2~, etc. of ~type1~, ~type2~, etc.
 **** or type
 ~or~ type means one of type in all given candidate types.
 **** named array

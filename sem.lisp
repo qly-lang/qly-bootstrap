@@ -10,7 +10,6 @@
    :splice-out-of-array
 
    :qly-sem-qly-ast
-   :qly-sem-var-defs ; to delete
    :qly-sem-scopes
    :scope-var-defs
    :analyze-type
@@ -20,12 +19,12 @@
    :array-type
    :make-array-type
    :array-type-elem-type
-   :make-record-type
-   :make-record-field
-   :record-type
-   :record-type-fields
-   :record-field-name
-   :record-field-type))
+   :make-struct-type
+   :make-struct-field
+   :struct-type
+   :struct-type-fields
+   :struct-field-name
+   :struct-field-type))
 (in-package :qly.sem)
 
 ;;; Semantic errors
@@ -287,8 +286,8 @@
 
 (defstruct funtype params return)
 (defstruct array-type elem-type)
-(defstruct record-type fields)
-(defstruct record-field name type)
+(defstruct struct-type fields)
+(defstruct struct-field name type)
 (defstruct or-type variants)
 
 ;;; Analyze type pass, fill var-defs and type-defs in all scopes
@@ -397,15 +396,15 @@
          (error "Cannot find type ~a" symbol)))
     ((qly-array :value value)
      (cond
-       ((every 'colon-exp-p value) (make-record-type :fields (process-field-types value scope)))
+       ((every 'colon-exp-p value) (make-struct-type :fields (process-field-types value scope)))
        (t (match value
             ((list elem-type) (make-array-type :elem-type (process-type elem-type scope)))
             (t (error "Pattern in [] need to be either a type or a list of field:type"))))))
     ((call-exp :value (qly-symbol :value :|array|)
                :args (qly-array :value (list elem-type)))
      (make-array-type :elem-type (process-type elem-type scope)))
-    ((call-exp :value (qly-symbol :value :|record|) :args (qly-array :value field-types))
-     (make-record-type :fields (process-field-types field-types scope)))
+    ((call-exp :value (qly-symbol :value :|struct|) :args (qly-array :value field-types))
+     (make-struct-type :fields (process-field-types field-types scope)))
     ((call-exp :value (qly-symbol :value :|or|) :args variants)
      (make-or-type :variants (mapcar (lambda (variant) (process-type variant scope))
                                      variants)))
@@ -418,7 +417,7 @@
   (mapcar (lambda (field)
             (match field
               ((colon-exp :value (qly-symbol :value field-name) :colon field-type)
-               (make-record-field :name field-name :type (process-type field-type scope)))
+               (make-struct-field :name field-name :type (process-type field-type scope)))
               (t (error "Field must be symbol:type"))))
           fields))
 
