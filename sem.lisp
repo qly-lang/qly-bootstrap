@@ -19,7 +19,13 @@
    :var-def-type
    :array-type
    :make-array-type
-   :array-type-elem-type))
+   :array-type-elem-type
+   :make-record-type
+   :make-record-field
+   :record-type
+   :record-type-fields
+   :record-field-name
+   :record-field-type))
 (in-package :qly.sem)
 
 ;;; Semantic errors
@@ -389,12 +395,16 @@
      (if (lookup-type symbol scope)
          symbol
          (error "Cannot find type ~a" symbol)))
-    ((qly-array :value (list elem-type))
-     (make-array-type :elem-type (process-type elem-type scope)))
+    ((qly-array :value value)
+     (cond
+       ((every 'colon-exp-p value) (make-record-type :fields (process-field-types value scope)))
+       (t (match value
+            ((list elem-type) (make-array-type :elem-type (process-type elem-type scope)))
+            (t (error "Pattern in [] need to be either a type or a list of field:type"))))))
     ((call-exp :value (qly-symbol :value :|array|)
                :args (qly-array :value (list elem-type)))
      (make-array-type :elem-type (process-type elem-type scope)))
-    ((call-exp :value (qly-symbol :value :|record|) :args field-types)
+    ((call-exp :value (qly-symbol :value :|record|) :args (qly-array :value field-types))
      (make-record-type :fields (process-field-types field-types scope)))
     ((call-exp :value (qly-symbol :value :|or|) :args variants)
      (make-or-type :variants (mapcar (lambda (variant) (process-type variant scope))
@@ -406,9 +416,10 @@
 
 (defun process-field-types (fields scope)
   (mapcar (lambda (field)
-            (match colon
-              ((colon-exp :value field-name :colon field-type)
-               (make-record-field :name field-name :type (process-type field-type scope)))))
+            (match field
+              ((colon-exp :value (qly-symbol :value field-name) :colon field-type)
+               (make-record-field :name field-name :type (process-type field-type scope)))
+              (t (error "Field must be symbol:type"))))
           fields))
 
 ;;; Resolve var pass, resolve every var to its definition
