@@ -60,70 +60,70 @@ rule-char := (or "." "[" ":"" "]" "\"" "\\" "'" "," "@" "#")
 **** empty type
 Only nil, means nothing. Explict denote a function returns nothing is ~f[fname[args]:nil]~. nil is both a type and a symbol. The value of symbol nil is not a symbol and can be seen as nothing.
 **** bool
-Only true and false and only bool type can be used in ~if~ condition. They can be expressed by true and false symbol. The value of true and false symbol is not symbol but "true" "false" value. In the other word, ~true~ is not ~'true~
+     Only true and false and only bool type can be used in ~if~ condition. They can be expressed by true and false symbol. The value of true and false symbol is not symbol but "true" "false" value. In the other word, ~true~ is not ~'true~
 **** symbol
-An interned string that can include any character. To write a symbol literal, use ~'~ before it, such as ~'i-am-a-symbol~. For whitespace, newline, tab, quote, bracket, dot, backquote, comma, backslash and sharp (which are special macro characters), they need to escape by ~\~. Symbol has no name space. A module expression ~A.B~ is a dot expression with two symbols: ~A~ and ~B~. Symbol is equal if and only if the string is same.
+     An interned string that can include any character. To write a symbol literal, use ~'~ before it, such as ~'i-am-a-symbol~. For whitespace, newline, tab, quote, bracket, dot, backquote, comma, backslash and sharp (which are special macro characters), they need to escape by ~\~. Symbol has no name space. A module expression ~A.B~ is a dot expression with two symbols: ~A~ and ~B~. Symbol is equal if and only if the string is same.
 **** (signed) integer
-- integer: machine native integer type. in 32 bit machine it's i32, in 64 bit machine it's i64
-- i8, i16, i32, i64, i128, i256
+     - integer: machine native integer type. in 32 bit machine it's i32, in 64 bit machine it's i64
+     - i8, i16, i32, i64, i128, i256
 
-A integer literal is of type integer. Unless use 3:i8 or explictly mark type when define var: v[x:i8 3]
+     A integer literal is of type integer. Unless use 3:i8 or explictly mark type when define var: v[x:i8 3]
 **** unsigned integer
-- unsigned: machine native integer type. in 32 bit machine it's u32, in 64 bit machine it's u64
-- u8, u16, u32, u64, u128, u256
+     - unsigned: machine native integer type. in 32 bit machine it's u32, in 64 bit machine it's u64
+     - u8, u16, u32, u64, u128, u256
 
-Use 3:u8 as unsigned literal. Or use 0xf, 0b0011, 0o77, which means unsigned type.
+     Use 3:u8 as unsigned literal. Or use 0xf, 0b0011, 0o77, which means unsigned type.
 **** big integer
-Bigger than i256 and u256 is expressed as big integer. Big integer is always signed and has infinite number precision (when memory allows)
+     Bigger than i256 and u256 is expressed as big integer. Big integer is always signed and has infinite number precision (when memory allows)
 **** real
-real always mean f64 in all machines. There is also f32, f64, f128 and f256 type can be used.
+     real always mean f64 in all machines. There is also f32, f64, f128 and f256 type can be used.
 **** decimal
-For more precision than f256 is expressed as decimal, which has infinite precision (when memory allows)
+     For more precision than f256 is expressed as decimal, which has infinite precision (when memory allows)
 **** other mathematical types
-Other mathematical type is supported via standard library, such as rational number, number or expression in group, ring and field.
+     Other mathematical type is supported via standard library, such as rational number, number or expression in group, ring and field.
 *** Aggregate types
 **** string
-string is internally UTF-8 encoded u8 array. It support all array operations as well as string specific operation
+     string is internally UTF-8 encoded u8 array. It support all array operations as well as string specific operation
 **** atom
-All above primitive type and string is consider a single unit of the qly language and is atom type. Formally:
-#+BEGIN_SRC
+     All above primitive type and string is consider a single unit of the qly language and is atom type. Formally:
+     #+BEGIN_SRC
 t[atom or[nil bool symbol integer i8 ... i256 unsigned u8 ... u256 real f32 ... f256 decimal string]]
-#+END_SRC
+     #+END_SRC
 
 **** array
-~array[type]~ denote a dynamic array of type ~type~
+     ~array[type]~ denote a dynamic array of type ~type~
 **** struct
-~struct[field1:type1 field2:type2 ...]~ denote an aggregate struct in contiguous memory. It has ~field1~, ~field2~, etc. of ~type1~, ~type2~, etc.
+     ~struct[field1:type1 field2:type2 ...]~ denote an aggregate struct in contiguous memory. It has ~field1~, ~field2~, etc. of ~type1~, ~type2~, etc.
 **** or type
-~or~ type means one of type in all given candidate types.
+     ~or~ type means one of type in all given candidate types.
 **** named array
-named array is a meta type of ~symbol[mexp1 mexp2]~ and mostly used for meta programming.
+     named array is a meta type of ~symbol[mexp1 mexp2]~ and mostly used for meta programming.
 **** mexp
-mexp is any valid qly expression.
+     mexp is any valid qly expression.
 **** low level types
-There's some additional low level types that help for more performance:
-- buffer[type n]: boundary checked fixed size array
-- enum[CAND0 CAND1 CANDN]: c-like enum that has CAND0, ... CANDN which equals to 0, ..., N respectively
-- union[CAND0 CAND1 CANDN]: c-like union that has shared memory of same type
-- emb[x]: used in struct, embed type x. By default type is reference type, embed type take that part of memory and put it inline.
+     There's some additional low level types that help for more performance:
+     - buffer[type n]: boundary checked fixed size array
+     - enum[CAND0 CAND1 CANDN]: c-like enum that has CAND0, ... CANDN which equals to 0, ..., N respectively
+     - union[CAND0 CAND1 CANDN]: c-like union that has shared memory of same type
+     - emb[x]: used in struct, embed type x. By default type is reference type, embed type take that part of memory and put it inline.
 * Semantics
 ** Define a var
-If type is not specified, it will be inferred from context.
-#+BEGIN_SRC
+   If type is not specified, it will be inferred from context.
+   #+BEGIN_SRC
 v[name : type val]
 v[name val]
 v[name : type]
-#+END_SRC
+   #+END_SRC
 
 ** Define a type
-Type use a different namespace than vars.
-#+BEGIN_SRC
+   Type use a different namespace than vars.
+   #+BEGIN_SRC
 t[name def]
-#+END_SRC
+   #+END_SRC
 
 ** Define a function
-Any unspecify typed args will be type inferred. Form will return a function object. If name is omitted, an anonymous function is defined. Function and var shares same namespace.
-#+BEGIN_SRC
+   Any unspecify typed args will be type inferred. Form will return a function object. If name is omitted, an anonymous function is defined. Function and var shares same namespace.
+   #+BEGIN_SRC
 f[fname[arg1 arg2 ...]
   mexp1
   mexp2]
@@ -133,23 +133,23 @@ f[fname[arg1:type1 ...]:rettype
 f[[arg1 arg2:type2]:rettype
   mexp1
   mexp2]
-#+END_SRC
+   #+END_SRC
 
 ** Block
-A block explicitly introduces a lexical scope. Top level and inside a function body introduce an implicit lexical scope. In Qly, all var in the same lexical scope is available, regardless there sequence of definition. It's not allowed to have same var defined twice in the same lexical scope
-#+BEGIN_SRC
+   A block explicitly introduces a lexical scope. Top level and inside a function body introduce an implicit lexical scope. In Qly, all var in the same lexical scope is available, regardless there sequence of definition. It's not allowed to have same var defined twice in the same lexical scope
+   #+BEGIN_SRC
 b[mexp1
   mexp2
   ...]
-#+END_SRC
+   #+END_SRC
 
 ** Control Flows
 *** If
-#+BEGIN_SRC
+    #+BEGIN_SRC
 if[condition
    then-branch
    else-branch]
-#+END_SRC
+    #+END_SRC
 
 *** Goto labels
 
@@ -162,43 +162,85 @@ if[condition
 ** Condition System: todo, for now use only return
 
 ** Generic Function and Protocol Types
-Generic Function is function defined with same name, same length of arguments but different types. It's a general way to achieve polymorphism. Any collection of Generic Function implictly determines a Protocol Type. Implicit Protocol Type can be named to Explicit Protocol Type. Both Implicit and Explicit Protocol Type is used by Qly Compiler to do type inference, if a value is not specified a type and used as arguments as one or more generic functions. The difference between a Protocol Type to a Trait or an Interface in other programming language is Protocol Type is more general, can polymorphic on more than one arguments. Therefore, there's no such concept as ~self~ of ~this~ in a generic function (method in other lnguages), instead, all arguments can be specialized and polymorphic to different type. For convininience purpose, qly has a ~.~ syntax sugar, which will convert a ~a.b[c]~ call to ~b[a c]~ so it looks as simple as a method call and you can always consider first argument of a generic function as `self`
+   Generic Function is function defined with same name, same length of arguments but different types. It's a general way to achieve polymorphism. Any collection of Generic Function implictly determines a Protocol Type. Implicit Protocol Type can be named to Explicit Protocol Type. Both Implicit and Explicit Protocol Type is used by Qly Compiler to do type inference, if a value is not specified a type and used as arguments as one or more generic functions. The difference between a Protocol Type to a Trait or an Interface in other programming language is Protocol Type is more general, can polymorphic on more than one arguments. Therefore, there's no such concept as ~self~ of ~this~ in a generic function (method in other lnguages), instead, all arguments can be specialized and polymorphic to different type. For convininience purpose, qly has a ~.~ syntax sugar, which will convert a ~a.b[c]~ call to ~b[a c]~ so it looks as simple as a method call and you can always consider first argument of a generic function as `self`
 
-To define a protocol type, use
-#+BEGIN_SRC
+   To define a protocol type, use
+   #+BEGIN_SRC
 t[protocol-name
   p[[type-arg1 type-arg2 ...]
     f[name1 [type-arg1 known-type1 ...]:rettype]
     f[name2 [type-arg1 type-arg2 known-type2 ...]:rettype2]]]
-#+END_SRC
+   #+END_SRC
 
-one argument can be bind by a protocol type of a partial protocol type, such as ~a:protocol-type1~ (if protocol-type1 just has one type arg that's just a. this is same as interface in other language). ~a:protocol2[a str]~ means ~a~ satisfy a protocol type that, together with str obey protocol2.
+   one argument can be bind by a protocol type of a partial protocol type, such as ~a:protocol-type1~ (if protocol-type1 just has one type arg that's just a. this is same as interface in other language). ~a:protocol2[a str]~ means ~a~ satisfy a protocol type that, together with str obey protocol2.
 
-If a and b together satisfy a protocol type X and we want to indicate that in the type annotation, we can do:
-#+BEGIN_SRC
+   If a and b together satisfy a protocol type X and we want to indicate that in the type annotation, we can do:
+   #+BEGIN_SRC
 f[fname [a:X.a b:X.b] ...]
 t[protocol2
   p[arg
     f[name1 [X.a X.b arg]]]]
-#+END_SRC
+   #+END_SRC
 
-And in protocol type definition you need specify types, but in function definition it's often can be omit and type inferencer will inference the type.
+   And in protocol type definition you need specify types, but in function definition it's often can be omit and type inferencer will inference the type.
 
 * Extensions
 ** Parser macro
 ** Macro
+   Macro itself is a simple concept, a macro transfer some code to other code. It's definiton looks like a function definition, takes exprs as argument and returns transformed expression. For example, suppose we have ~while~ and would like to define a infinite loop ~loop~:
+   #+BEGIN_SRC
+m[loop[exprs:[mexp]]
+  'while[true @exprs]]
+   #+END_SRC
+
+   It took an array of mexp as argument and return tranformed expr: a ~while[true]~ with exprs inserted inside as body of ~while~. Same as call a function, if the last (here the only one) argument is an array, it can be passed as multiple arguments and qly will form it to an array. Returned expression need to be quoted, otherwise they'll be executed during computing what it'll expand to, i.e. here it must return a mexp, that is quote[mexp] evaluated to, if it were just ~while[true ...]~, This infinite loop will executed right now. It's therefore very similar to macros in lisp.
+
+But when come to debugging, macros in other programming language can become a headache. There're two macro related debugging problems:
+- macro expanding might be not as what you expected
+- macro expanding is correct, but the expanded code logic is wrong (if you were not using macro but manually write expanded version of code, you'll encounter same error)
+
+Problem 1 is addressed in lisp by ~macroexpand~ and ~macroexpand-1~, to see how macro expand looks like given specific exprs as input. You can therefore write unit test to ensure macro is expanded in an expected way. It's recommend to write this kind of test before trying to use macro to avoid problem 1, except when macro logic is trivial. Qly also has macro typed that can catch you invalid arguments. For example, you require some argument must be a dot exp.
+
+Problem 2 is not handled properly in any existing programming language. The headache looks like this, say some programmer write code to use ~loop~ and there's a semantic error in the body of loop. In all other programming language, due to macro expand already happened. compiler will tell you something wrong in the body of ~while~. But, you'll see there's no ~while~ and realized macro defined ~loop~ isn't really a builtin operator that has same level of support like other qly builtin operator. This is both bad aesthically and practically. In practice, there's complicated macros that expands to macros that expands to macros and result code will look very different, and likely very lengthy than original macro code. Then, if somewhere there's a compile error or runtime error, what compiler / stack trace shown will become very confusing. Qly address this problem by maintain three levels of code in compiler and debug build. The lowest level is all macro is fully expanded as if there's no macro, this is same to other programming languages. The middle level expand macro one level, this helps if you want to debug your macro expanding and the code at same time. The highest and default level, is directly show error in the unexpanded form of expression, as if the macro used is just another builtin operator. For example:
+#+BEGIN_SRC
+f[doing-x[]]
+loop[doing-x[]
+     doing-y[]]
+#+END_SRC
+will give a compilation error:
+#+BEGIN_SRC
+in line 3, col 6, in ~loop~, ~doing-y~ is not defined.
+#+END_SRC
+
+This is exactly same as if loop were a builtin operator ~while~. This is even true with qly debugger, when you step, you're step expressions in ~loop~, not the orginal ~while~. Therefore you can freely extend qly with macros and all macros will look like native part of the language. If you have ensured correctness via unit tests, you don't need middle level and lowest level at all.
+
+Let's assume ~while~ were not part of qly language, instead ~if~, ~break~ and ~loop~ were. In this case we can define ~while~ as:
+#+BEGIN_SRC
+m[while[condition:mexp body:[mexp]]
+  '[loop [if not[,mexp]
+             break[]]
+         @body]]
+
+#+END_SRC
+
+Now if you step into while, you'll step from mexp to body of mexps, ~if~ and ~break~ is simply not visible. Also qly run full context type inference on macro definitions, it will figure out ~mexp~ evaluated to ~bool~ because it passed to argument to builtin function ~not~, therefore if you writes:
+#+BEGIN_SRC
+while[1
+      blah[]]
+#+END_SRC
+Qly gives compilation error because =1 is not of type bool=.
 ** Generics
-There is no generic types in qly. Instead, generic is a kind of code generation that just a special case of macros. There's helper library to define generic types with macros.
+   There is no generic types in qly. Instead, generic is a kind of code generation that just a special case of macros. There's helper library to define generic types with macros.
 ** Compiler macro
 
 * Runtime
 ** Memory System
 *** Default: ARC, auto move and manual weak ref
-This is a balanced setup that good for most situation, only consider use GC when there's a lot of weak reference. Only consider use manual memory management when extreme high performance or low memory usages such as very limited embed environment.
+    This is a balanced setup that good for most situation, only consider use GC when there's a lot of weak reference. Only consider use manual memory management when extreme high performance or low memory usages such as very limited embed environment.
 
-When doing a ~s~ to a variable, if compiler detects no further access to original variable happens, it's been moved to new var or new location. Otherwise, an automatic reference counting (ARC) happens. If in ARC case and there's a need for circular reference, use explicit weak reference to avoid circle. The syntax is ~r[source]~
+    When doing a ~s~ to a variable, if compiler detects no further access to original variable happens, it's been moved to new var or new location. Otherwise, an automatic reference counting (ARC) happens. If in ARC case and there's a need for circular reference, use explicit weak reference to avoid circle. The syntax is ~r[source]~
 
-Rust style move-by-default, explict-Arc memory management is a bad design. User often end up with a lot of Arc in a complex program. In the case of simple program where move is enough, qly compiler is smart enough to optimize an Arc to a move. In both case it's as efficient as Rust but more convinient to the programmer.
+    Rust style move-by-default, explict-Arc memory management is a bad design. User often end up with a lot of Arc in a complex program. In the case of simple program where move is enough, qly compiler is smart enough to optimize an Arc to a move. In both case it's as efficient as Rust but more convinient to the programmer.
 *** GC
 *** Manual
 
@@ -221,12 +263,12 @@ Rust style move-by-default, explict-Arc memory management is a bad design. User 
 
 * Compilation
 ** Full context type inference
-Assume there is a function ~print[x:str]~ and another function ~print[x:i32]~, a function ~+[x:int y:int]~ and also ~append[x:str y:str]~. We have following snippet:
-#+BEGIN_SRC
+   Assume there is a function ~print[x:str]~ and another function ~print[x:i32]~, a function ~+[x:int y:int]~ and also ~append[x:str y:str]~. We have following snippet:
+   #+BEGIN_SRC
 f[print-fancy[x]
   print[x]
-  print["aaa"]
-  print[append[x "ccc"]]]
+  print[aaa]
+  print[append[x ccc""]]]
 #+END_SRC
 
 Inferencer knows:
