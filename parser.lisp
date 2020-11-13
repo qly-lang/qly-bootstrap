@@ -24,8 +24,8 @@
    :qly-atom-p :qly-atom-value
    :qly-string-p :qly-string-value
    :qly-real-p :qly-real-value :qly-real-type
-   :qly-unsigned-p :qly-unsigned-value :qly-unsigned-base :qly-unsigned-type
-   :qly-integer-p :qly-integer-value :qly-integer-type
+   :qly-uint-p :qly-uint-value :qly-uint-base :qly-uint-type
+   :qly-int-p :qly-int-value :qly-int-type
    :qly-symbol-p :qly-symbol-value
 
    :position-to-line-col
@@ -94,8 +94,8 @@
 ;;; Possible atom:
 (defstruct (qly-string (:include qly-atom)))
 (defstruct (qly-real (:include qly-atom)) type)
-(defstruct (qly-unsigned (:include qly-atom)) type base)
-(defstruct (qly-integer (:include qly-atom)) type)
+(defstruct (qly-uint (:include qly-atom)) type base)
+(defstruct (qly-int (:include qly-atom)) type)
 (defstruct (qly-symbol (:include qly-atom)))
 
 ;;; Utility functions
@@ -162,7 +162,7 @@
 
 ;;; Atoms
 
-(defrule qly-atom (or qly-string qly-real qly-unsigned qly-integer qly-symbol))
+(defrule qly-atom (or qly-string qly-real qly-uint qly-int qly-symbol))
 
 (defrule qly-string (and #\" (* string-char) #\")
   (:destructure (q1 string q2 &bounds start end)
@@ -171,8 +171,8 @@
                                  :end end
                                  :value (text string))))
 
-(defrule qly-integer (and (? (or "+" "-")) (+ digit-char)
-                          (! (or symbol-char ".")))
+(defrule qly-int (and (? (or "+" "-")) (+ digit-char)
+                      (! (or symbol-char ".")))
   (:lambda (list)
     (parse-integer (text list) :radix 10))
   (:lambda (integer)
@@ -181,10 +181,10 @@
           ((<= (- (expt 2 127)) integer (1- (expt 2 127))) `(:i128 ,integer))
           (t `(:bigint ,integer))))
   (:lambda (typed-integer &bounds start end)
-    (make-qly-integer :start start
-                      :end end
-                      :value (second typed-integer)
-                      :type (first typed-integer))))
+    (make-qly-int :start start
+                  :end end
+                  :value (second typed-integer)
+                  :type (first typed-integer))))
 
 (defrule qly-real
     (and (? (or "+" "-"))
@@ -201,10 +201,10 @@
                    :value (parse-float (text list))
                    :type :f64)))
 
-(defrule qly-unsigned (and (or (and "0x" (+ hex-char))
-                               (and "0o" (+ oct-char))
-                               (and "0b" (+ bin-char)))
-                           (! symbol-char))
+(defrule qly-uint (and (or (and "0x" (+ hex-char))
+                           (and "0o" (+ oct-char))
+                           (and "0b" (+ bin-char)))
+                       (! symbol-char))
   (:lambda (list)
     (let ((radix (case (aref (caar list) 1)
                    (#\x 16)
@@ -215,13 +215,13 @@
     (cond ((< integer (expt 2 32)) `(:u32 ,integer ,radix))
           ((< integer (expt 2 64)) `(:u64 ,integer ,radix))
           ((< integer (expt 2 128)) `(:u128 ,integer ,radix))
-          (t `(:bigunsigned ,integer ,radix))))
+          (t `(:biguint ,integer ,radix))))
   (:destructure (type value base &bounds start end)
-    (make-qly-unsigned :start start
-                       :end end
-                       :value value
-                       :type type
-                       :base base)))
+    (make-qly-uint :start start
+                   :end end
+                   :value value
+                   :type type
+                   :base base)))
 
 (defrule qly-symbol (+ symbol-char)
   (:lambda (list &bounds start end)
@@ -423,10 +423,10 @@
     (qly-real
      (princ (mexp-value mexp) stream)
      (incf col (length (princ-to-string (mexp-value mexp)))))
-    (qly-unsigned
+    (qly-uint
      (princ (mexp-value mexp) stream)
      (incf col (length (princ-to-string (mexp-value mexp)))))
-    (qly-integer
+    (qly-int
      (princ (mexp-value mexp) stream)
      (incf col (length (princ-to-string (mexp-value mexp))))))
   (values last-end last-bracket-col col))

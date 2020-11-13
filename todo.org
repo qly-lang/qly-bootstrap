@@ -11,12 +11,13 @@
 * enough lib for self bootstrap
 
 * stage 2 tasks
+** self bootstrap
 ** type inference
 ** more language features, error handling
 ** more language libs
 ** protocol type, type inference for protocol type
 ** coolgates backend
-** self bootstrap
+** macro
 
 * stage 3 tasks
 ** documentation

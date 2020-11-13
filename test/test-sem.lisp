@@ -17,14 +17,22 @@
   (when (eql (type-of t1) (type-of t2))
     (typecase t1
       (array-type (type-equal (array-type-elem-type t1) (array-type-elem-type t2)))
-      (struct-type (every (lambda (field1 field2)
-                            (and
-                             (eql (struct-field-name field1)
-                                  (struct-field-name field2))
-                             (type-equal (struct-field-type field1)
-                                         (struct-field-type field2))))
-                          (struct-type-fields t1)
-                          (struct-type-fields t2)))
+      (struct-type (and (= (length (struct-type-fields t1))
+                           (length (struct-type-fields t2)))
+                        (every (lambda (field1 field2)
+                                 (and
+                                  (eql (struct-field-name field1)
+                                       (struct-field-name field2))
+                                  (type-equal (struct-field-type field1)
+                                              (struct-field-type field2))))
+                               (struct-type-fields t1)
+                               (struct-type-fields t2))))
+      (or-type (and (= (length (or-type-variants t1))
+                       (length (or-type-variants t2)))
+                    (every 'type-equal (or-type-variants t1) (or-type-variants t2))))
+      (fun-type (and (type-equal (fun-type-return t1) (fun-type-return t2))
+                     (= (length (fun-type-params t1)) (length (fun-type-params t2)))
+                     (every 'type-equal (fun-type-params t1) (fun-type-params t2))))
       (t (equal t1 t2)))))
 
 (test define-vars
@@ -88,3 +96,24 @@ v[z:[x:string y:[y:string] z:[string] a:[[x:string]]]]
                                                                          :name :|x|
                                                                          :type :|string|)))))))))
                     (scope-var-defs (gethash :root (qly-sem-scopes sem))))))
+
+(test define-or-types
+  (let ((sem (make-qly-sem
+              (parse-qly-text
+               #"
+v[y:or[string int]]
+"#))))
+    (analyze-type sem)
+    (var-def-env-is `((:|y| . ,(make-or-type :variants (list :|string| :|int|))))
+                    (scope-var-defs (gethash :root (qly-sem-scopes sem))))))
+
+(test define-functions
+      (let ((sem (make-qly-sem
+                  (parse-qly-text
+                   #"
+f[x []]
+"#))))
+        (analyze-type sem)
+        (print sem)
+        (var-def-env-is `((:|x| . ,(make-fun-type :return :untyped :params nil)))
+                        (scope-var-defs (gethash :root (qly-sem-scopes sem))))))

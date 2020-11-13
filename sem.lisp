@@ -24,7 +24,14 @@
    :struct-type
    :struct-type-fields
    :struct-field-name
-   :struct-field-type))
+   :struct-field-type
+   :make-or-type
+   :or-type-variants
+   :or-type
+   :fun-type
+   :make-fun-type
+   :fun-type-params
+   :fun-type-return))
 (in-package :qly.sem)
 
 ;;; Semantic errors
@@ -103,7 +110,9 @@
              (write-string ":" stream)
              (pprint-indent :block 2 stream)
              (pprint-newline :mandatory stream)
-             (princ value stream))))
+             (princ value stream)
+             (pprint-indent :block 0 stream)
+             (pprint-newline :mandatory stream))))
 
 (defstruct (scope
             (:constructor %make-scope))
@@ -242,14 +251,14 @@
   (let ((type-defs (make-env-chain)))
     (setf (lookup :|symbol| type-defs) (make-type-def)
           (lookup :|int| type-defs) (make-type-def)
-          (lookup :|unsigned| type-defs) (make-type-def)
+          (lookup :|uint| type-defs) (make-type-def)
           (lookup :|i8| type-defs) (make-type-def)
           (lookup :|i16| type-defs) (make-type-def)
           (lookup :|i32| type-defs) (make-type-def)
           (lookup :|i64| type-defs) (make-type-def)
           (lookup :|i128| type-defs) (make-type-def)
           (lookup :|bigint| type-defs) (make-type-def)
-          (lookup :|bigunsigned| type-defs) (make-type-def)
+          (lookup :|biguint| type-defs) (make-type-def)
           (lookup :|u8| type-defs) (make-type-def)
           (lookup :|u16| type-defs) (make-type-def)
           (lookup :|u32| type-defs) (make-type-def)
@@ -284,11 +293,19 @@
 
 ;;; Basic type building blocks
 
-(defstruct funtype params return)
+(defstruct fun-type params return) ; TODO: rename to fun-type
 (defstruct array-type elem-type)
 (defstruct struct-type fields)
 (defstruct struct-field name type)
 (defstruct or-type variants)
+
+(defmethod print-object :around ((obj fun-type) stream)
+  (if *print-readably*
+      (call-next-method)
+      (debug-print-fun-type obj stream)))
+
+(defun debug-print-fun-type (fun-type stream)
+  (format stream "f[[~{~a~^ ~}]:~a]" (fun-type-params fun-type) (fun-type-return fun-type)))
 
 ;;; Analyze type pass, fill var-defs and type-defs in all scopes
 
@@ -332,16 +349,16 @@
         (setf (lookup fname (scope-var-defs scope))
               (make-var-def
                :mexp mexp
-               :type (make-funtype :params (process-param-types params scope)
-                                   :return (process-type return-type scope)))))
+               :type (make-fun-type :params (process-param-types params scope)
+                                    :return (process-type return-type scope)))))
        (;; [param1:type1 param2 param3:type3 ...]
 
         (qly-array :value params)
         (setf (lookup fname (scope-var-defs scope))
               (make-var-def
                :mexp mexp
-               :type (make-funtype :params (process-param-types params scope)
-                                   :return :untyped))))))
+               :type (make-fun-type :params (process-param-types params scope)
+                                    :return :untyped))))))
     (;; t[type typedef]
      (call-exp :value (qly-symbol :value :|t|) :args
                (qly-array :value (list (qly-symbol :value type)
@@ -405,7 +422,7 @@
      (make-array-type :elem-type (process-type elem-type scope)))
     ((call-exp :value (qly-symbol :value :|struct|) :args (qly-array :value field-types))
      (make-struct-type :fields (process-field-types field-types scope)))
-    ((call-exp :value (qly-symbol :value :|or|) :args variants)
+    ((call-exp :value (qly-symbol :value :|or|) :args (qly-array :value variants))
      (make-or-type :variants (mapcar (lambda (variant) (process-type variant scope))
                                      variants)))
     (_ (error "Unknown pattern of type"))))

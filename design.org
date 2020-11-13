@@ -21,7 +21,7 @@ quote-exp := (and "'" (? whitespace) mexp)
 unquote-exp := (and "," (? whitespace) mexp)
 splice-exp := (and "@" (? whitespace) mexp)
 qly-array := (and "[" mexp* "]")
-qly-atom := (or qly-string qly-real qly-unsigned qly-integer qly-symbol)
+qly-atom := (or qly-string qly-real qly-uint qly-int qly-symbol)
 
 mexp-except-colon (or dot-exp call-exp quote-exp unquote-exp splice-exp qly-array qly-atom)
 mexp-except-colon-dot-call (or quote-exp unquote-exp splice-exp qly-array qly-atom)
@@ -35,11 +35,11 @@ qly-real := (and (? (or "+" "-"))
                      (and (+ digit-char)
                           (or "e" "E") (? (or "+" "-")) (+ digit-char)))
                  (! symbol-char))
-qly-unsigned := (and (or (and "0x" (+ hex-char))
+qly-uint := (and (or (and "0x" (+ hex-char))
                          (and "0o" (+ oct-char))
                          (and "0b" (+ bin-char)))
                      (! symbol-char))
-qly-integer := (and (? (or "+" "-")) (+ digit-char)
+qly-int := (and (? (or "+" "-")) (+ digit-char)
                     (! (or symbol-char ".")))
 qly-symbol := (+ symbol-char)
 
@@ -63,16 +63,16 @@ Only nil, means nothing. Explict denote a function returns nothing is ~f[fname[a
      Only true and false and only bool type can be used in ~if~ condition. They can be expressed by true and false symbol. The value of true and false symbol is not symbol but "true" "false" value. In the other word, ~true~ is not ~'true~
 **** symbol
      An interned string that can include any character. To write a symbol literal, use ~'~ before it, such as ~'i-am-a-symbol~. For whitespace, newline, tab, quote, bracket, dot, backquote, comma, backslash and sharp (which are special macro characters), they need to escape by ~\~. Symbol has no name space. A module expression ~A.B~ is a dot expression with two symbols: ~A~ and ~B~. Symbol is equal if and only if the string is same.
-**** (signed) integer
-     - integer: machine native integer type. in 32 bit machine it's i32, in 64 bit machine it's i64
+**** (signed) int
+     - int: machine native integer type. in 32 bit machine it's i32, in 64 bit machine it's i64
      - i8, i16, i32, i64, i128, i256
 
-     A integer literal is of type integer. Unless use 3:i8 or explictly mark type when define var: v[x:i8 3]
-**** unsigned integer
-     - unsigned: machine native integer type. in 32 bit machine it's u32, in 64 bit machine it's u64
+     A integer literal is of type int. Unless use 3:i8 or explictly mark type when define var: v[x:i8 3]
+**** uint integer
+     - uint: machine native integer type. in 32 bit machine it's u32, in 64 bit machine it's u64
      - u8, u16, u32, u64, u128, u256
 
-     Use 3:u8 as unsigned literal. Or use 0xf, 0b0011, 0o77, which means unsigned type.
+     Use 3:u8 as uint literal. Or use 0xf, 0b0011, 0o77, which means uint type.
 **** big integer
      Bigger than i256 and u256 is expressed as big integer. Big integer is always signed and has infinite number precision (when memory allows)
 **** real
@@ -87,7 +87,7 @@ Only nil, means nothing. Explict denote a function returns nothing is ~f[fname[a
 **** atom
      All above primitive type and string is consider a single unit of the qly language and is atom type. Formally:
      #+BEGIN_SRC
-t[atom or[nil bool symbol integer i8 ... i256 unsigned u8 ... u256 real f32 ... f256 decimal string]]
+t[atom or[nil bool symbol int i8 ... i256 uint u8 ... u256 real f32 ... f256 decimal string]]
      #+END_SRC
 
 **** array
