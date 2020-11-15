@@ -21,6 +21,25 @@ Given the qly-symbol, have its scope.
 
 Two thing consider to cache:
 - symbol -> scope mapping
-  - also make scopes only store mexp -> scope mapping, use another hash table to keep symbol -> scope mapping
+  - also make scopes only store mexp -> scope mapping. (Done)
+  - use another hash table to keep symbol -> scope mapping
 - scope -> lookup def by symbol name (already have)
 - def -> occurs mapping
+
+Do we need generic? Runtime dispatch vs Compile time dispatch
+Two use cases: any generic or bind by protocol type generic.
+Any generic does not limit the arg type. Assume every type can be print, A function
+#+BEGIN_SRC
+f[print-verbose [x]
+  print["------"]
+  print[x]]
+#+END_SRC
+without generic this x infers to type ~any~, and it's dispatched at runtime (dynamically check it's type, and print calls print-string, print-int, etc based on x's type). Purpose of generic is to make this happen at compile time, so there generate different version of print-verbose-string, print-verbose-int, etc. and if user call ~print-verbose[1]~ it will be compiled to ~print-verbose-int[1]~ thus, faster. If generic is using on many types, it increases binary size.
+Bind by protocol type generic is generic but need to obey some protocol. For example a hash table, the key must obeys Hash protocol, which has a hash function to hash value of this type to a number. Again, without generic this become a runtime dispatch, with a generic it's doing compile time dispatch whenever it's possible. (It's not possible, for example, if using function to process a collection of different kind of Hash object, this case need run time dispatch anyway)
+From above we can see generic is not actual a programmaing language feature but rather than an instructive for compiler to choose between "fast execution (more compile time dispatch)" and "small binary (more run time dispatch)". So as the philosophy of qly, compiler should be smart and customizable to handle these case, instead of introduce a new programming language feature of generic. To be smart, qly compiler should do compile time dispatch (auto specialize definitions when there's no or only small increase to binary size). To be customizable, user can:
+- provide options to qly compiler cli, giving quantative standard of whether qly should compile something to a compile time dispatch.
+- annotate on specific function to override it to do compile time or runtime dispatch.
+In short, default should give a balanced performance and binary size in most use case, in special case where user need additional optimization, they still have the power to do so. To mark a function argument as compile time dispatch:
+~f[foo:X:'cd]~
+TO mark a function argument as runtime time dispatch:
+~f[foo:X:'rd]~

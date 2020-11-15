@@ -17,7 +17,9 @@
    :resolve-var
    :make-qly-sem
    :var-def-type
+   :var-def-mexp
    :type-def-def
+   :type-def-mexp
    :array-type
    :make-array-type
    :array-type-elem-type
@@ -33,7 +35,8 @@
    :fun-type
    :make-fun-type
    :fun-type-params
-   :fun-type-return))
+   :fun-type-return
+   :lookup))
 (in-package :qly.sem)
 
 ;;; Semantic errors
@@ -153,9 +156,8 @@
                         (var-def-type (cdr kv)))
                 (pprint-exit-if-list-exhausted)
                 (pprint-newline :mandatory stream))))
-      (pprint-logical-block (stream nil)
-        (pprint-indent :block 0 stream)
-        (pprint-newline :mandatory stream)))
+      (pprint-indent :block 0 stream)
+      (pprint-newline :mandatory stream))
 
     (when-let (type-defs (hash-table-alist (env-chain-%env (scope-type-defs scope))))
       (write-string "TYPE-DEFS: " stream)
@@ -270,9 +272,10 @@
           (lookup :|real| type-defs) (make-type-def)
           (lookup :|f32| type-defs) (make-type-def)
           (lookup :|f64| type-defs) (make-type-def)
-          (lookup :|decimal| type-defs) (make-type-def))
+          (lookup :|decimal| type-defs) (make-type-def)
+          (lookup :|bool| type-defs) (make-type-def))
     type-defs))
-(defvar *builtin-scope*
+(defparameter *builtin-scope*
   (%make-scope :var-defs *builtin-var-defs*
                :type-defs *builtin-type-defs*))
 
@@ -313,10 +316,10 @@
   (let ((scope (make-scope)))
     (setf (gethash :root (qly-sem-scopes qly-sem)) scope)
     (analyze-type-mexp* (qly-ast-mexp* (qly-sem-qly-ast qly-sem))
-                        (qly-sem-scopes qly-sem) scope)
+                        scope (qly-sem-scopes qly-sem))
     qly-sem))
 
-(defun analyze-type-mexp* (mexp* scopes scope)
+(defun analyze-type-mexp* (mexp* scope scopes)
   (loop for mexp in mexp* do (analyze-type-mexp-out1 mexp scope))
   (loop for mexp in mexp* do (analyze-type-mexp-out2 mexp scope))
   (loop for mexp in mexp* do (analyze-type-mexp-in mexp scope scopes)))
@@ -393,8 +396,30 @@
      (if (qly-symbol-p fname)
          (let ((scope (make-scope scope mexp)))
            (setf (gethash mexp scopes) scope)
+           (match signature
+             (;; [param1:type1 param2 param3:type3 ...]:return-type
+              (colon-exp :value (qly-array :value params))
+              (process-param-vars params scope))
+             (;; [param1:type1 param2 param3:type3 ...]
+              (qly-array :value params)
+              (process-param-vars params scope))
+             (_ (error "function signature must be either [param:type] array or [param:type]:return-type")))
            (analyze-type-mexp* mexp* scope scopes))
          (error "function name must be a symbol")))))
+
+(defun process-param-vars (params scope)
+  (loop for param in params do
+    (match param
+      ((colon-exp :value (qly-symbol :value name)
+                  :colon type)
+       (setf (lookup name (scope-var-defs scope))
+             (make-var-def :mexp param
+                           :type (process-type type scope))))
+      ((qly-symbol :value name)
+       (setf (lookup name (scope-var-defs scope))
+             (make-var-def :mexp param
+                           :type :untyped)))
+      (_ (error "function param must be either var or var:type")))))
 
 (defun process-param-types (params scope)
   (mapcar (lambda (param)
@@ -413,8 +438,6 @@
          symbol
          (error "Cannot find type ~a" symbol)))
     ((qly-array :value value)
-     (print type)
-     (print value)
      (cond
        ((every 'colon-exp-p value) (make-struct-type :fields (process-field-types value scope)))
        (t (match value

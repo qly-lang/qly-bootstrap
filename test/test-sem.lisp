@@ -171,3 +171,47 @@ t[type2 [type1]]
                                                    :|int|)))
                        (:|type2| . ,(make-array-type :elem-type :|type1|)))
                      (scope-type-defs (gethash :root (qly-sem-scopes sem))))))
+
+(test var-def-with-defined-type
+  (let ((sem (make-qly-sem (parse-qly-text #"
+t[x int]
+v[y:x]
+v[x:x 3]
+"#))))
+    (analyze-type sem)
+    (type-def-env-is `((:|x| . :|int|))
+                     (scope-type-defs (gethash :root (qly-sem-scopes sem))))
+    (var-def-env-is `((:|y| . :|x|)
+                      (:|x| . :|x|))
+                    (scope-var-defs (gethash :root (qly-sem-scopes sem))))))
+
+(test def-in-new-scope
+  (let ((sem (make-qly-sem (parse-qly-text #"
+t[type1 int]
+v[var1:type1 3]
+v[var2:type1 4]
+f[foo [var1]
+  t[type1 string]
+  t[type2 bool]
+  v[var2:type2 true]
+  v[var3:type1]]
+"#))))
+    (analyze-type sem)
+    (type-def-env-is `((:|type1| . :|int|))
+                     (scope-type-defs (gethash :root (qly-sem-scopes sem))))
+    (var-def-env-is `((:|var1| . :|type1|)
+                      (:|var2| . :|type1|)
+                      (:|foo| . ,(make-fun-type :return :untyped :params (list :untyped))))
+                    (scope-var-defs (gethash :root (qly-sem-scopes sem))))
+    (let ((foo-scope (gethash
+                      (var-def-mexp (lookup :|foo|
+                                            (scope-var-defs
+                                             (gethash :root (qly-sem-scopes sem)))))
+                      (qly-sem-scopes sem))))
+      (type-def-env-is `((:|type1| . :|string|)
+                         (:|type2| . :|bool|))
+                       (scope-type-defs foo-scope))
+      (var-def-env-is `((:|var2| . :|type2|)
+                        (:|var3| . :|type1|)
+                        (:|var1| . :untyped))
+                      (scope-var-defs foo-scope)))))

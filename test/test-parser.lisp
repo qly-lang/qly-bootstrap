@@ -170,9 +170,10 @@ b"))
   (qly-is '((:|:| :|a| (:|b|))) (parse-qly-text "a:b[]"))
   (qly-is '((:|:| (:|a|) :|b|)) (parse-qly-text "a[]:b"))
   (qly-is '((:|f|
-             (:|:| (:|foo| (:|:| :|a| :|int|) (:|:| :|b| (:|array| :|string|)))
+             :|foo|
+             (:|:| (:array (:|:| :|a| :|int|) (:|:| :|b| (:|array| :|string|)))
               :|type-a|)))
-          (parse-qly-text "f[foo[a:int b:array[string]]:type-a]")))
+          (parse-qly-text "f[foo [a:int b:array[string]]:type-a]")))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (set-dispatch-macro-character #\# #\" 'let-over-lambda:|#"-reader|))
