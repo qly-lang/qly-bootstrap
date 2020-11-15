@@ -17,6 +17,7 @@
    :dot-exp-prop :dot-exp-p :dot-exp-value
    :colon-exp-colon :colon-exp-p :colon-exp-value
    :call-exp-args :call-exp-p :call-exp-value
+   :call-exp-start
    :quote-exp-p :quote-exp-value
    :unquote-exp-p :unquote-exp-value
    :splice-exp-p :splice-exp-value
@@ -72,11 +73,11 @@
         do (setf r m)
 
       until (<= (- r l) 1)
-      finally (progn (print l) (print r) (print '-----)(return
-                                                         (cond
-                                                           ((funcall test (elt sequence l) item) l)
-                                                           ((funcall test (elt sequence r) item) r)
-                                                           (t                                    nil)))))))
+      finally (return
+                (cond
+                  ((funcall test (elt sequence l) item) l)
+                  ((funcall test (elt sequence r) item) r)
+                  (t                                    nil))))))
 
 (defstruct qly-ast path mexp* text newlines)
 (defstruct mexp start end value)

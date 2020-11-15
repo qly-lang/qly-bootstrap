@@ -45,7 +45,7 @@
 
 (defstruct (env-chain
             (:constructor make-env-chain (&optional %parent)))
-  (%env (make-hash-table :test #'equal))
+  (%env (make-hash-table :test #'equalp))
   %parent)
 
 (defmethod print-object :around ((object env-chain) stream)
@@ -90,7 +90,8 @@
 (defstruct (qly-sem
             (:constructor make-qly-sem (qly-ast)))
   qly-ast
-  (scopes (make-hash-table :test 'equal)))
+  (scopes (make-hash-table :test 'equalp))
+  (symbol-scopes (make-hash-table :test 'equalp)))
 
 (defmethod print-object :around ((object qly-sem) stream)
   (if *print-readably*
@@ -106,22 +107,36 @@
   (loop for key being the hash-keys of (qly-sem-scopes qly-sem)
           using (hash-value value)
         do (pprint-logical-block (stream nil)
-             (princ key stream)
-             (write-string ":" stream)
-             (pprint-indent :block 2 stream)
-             (pprint-newline :mandatory stream)
-             (princ value stream)
+             (match key
+               ((call-exp :value (qly-symbol :value :|f|)
+                          :args (qly-array :value args)
+                          :start start)
+                (match args
+                  ((list* (qly-symbol :value function-name) _)
+                   (format stream "function ~a at line ~a" function-name (position-to-line-col (qly-sem-qly-ast qly-sem) start)))
+                  ((list* _)
+                   (format stream "lambda at line ~a" (position-to-line-col (qly-sem-qly-ast qly-sem) start)))))
+               (_ (princ key stream)))
+             (when (scope-has-content-p value)
+               (write-string ":" stream)
+               (pprint-indent :block 2 stream)
+               (pprint-newline :mandatory stream)
+               (princ value stream))
              (pprint-indent :block 0 stream)
              (pprint-newline :mandatory stream))))
 
 (defstruct (scope
             (:constructor %make-scope))
-  mexp var-defs var-occurs type-defs type-occurs)
+  mexp var-defs type-defs)
 
 (defmethod print-object :around ((object scope) stream)
   (if *print-readably*
       (call-next-method)
       (debug-print-scope object stream)))
+
+(defun scope-has-content-p (scope)
+  (or (plusp (hash-table-count (env-chain-%env (scope-var-defs scope))))
+      (plusp (hash-table-count (env-chain-%env (scope-type-defs scope))))))
 
 (defun debug-print-scope (scope stream)
   (pprint-logical-block (stream nil)
@@ -137,35 +152,12 @@
                 (pprint-exit-if-list-exhausted)
                 (pprint-newline :mandatory stream)))))
 
-    (when-let (var-occurs (hash-table-alist (scope-var-occurs scope)))
-      (pprint-indent :block 0 stream)
-      (pprint-newline :mandatory stream)
-      (write-string "VAR-OCCURS: " stream)
-      (pprint-indent :block 2 stream)
-      (pprint-newline :mandatory stream)
-      (pprint-logical-block (stream var-occurs)
-        (pprint-exit-if-list-exhausted)
-        (loop (let* ((kv (pprint-pop))
-                     (line-col (multiple-value-list (position-to-line-col (cdr kv) (mexp-start (cdr kv))))))
-                (format stream "~a: ~a" (car kv)
-                        (format nil "line: ~a, col: ~a" (first line-col) (second line-col)))
-                (pprint-exit-if-list-exhausted)
-                (pprint-newline :mandatory stream)))))
-
-
     (when-let (type-defs (hash-table-alist (env-chain-%env (scope-type-defs scope))))
       (pprint-indent :block 0 stream)
       (pprint-newline :mandatory stream)
       (write-string "TYPE-DEFS: " stream)
       (pprint-indent :block 2 stream)
-      (pprint-newline :mandatory stream))
-
-    (when-let (type-occurs (hash-table-alist (scope-type-occurs scope)))
-      (pprint-indent :block 0 stream)
-      (pprint-newline :mandatory stream)
-      (write-string "TYPE-OCCURS: " stream)
-      (pprint-newline :mandatory stream)
-      (pprint-indent :block 2 stream))))
+      (pprint-newline :mandatory stream))))
 
 (defstruct var-def mexp type)
 (defstruct occur mexp)
@@ -249,7 +241,8 @@
 
 (defparameter *builtin-type-defs*
   (let ((type-defs (make-env-chain)))
-    (setf (lookup :|symbol| type-defs) (make-type-def)
+    (setf (lookup :|nil| type-defs) (make-type-def)
+          (lookup :|symbol| type-defs) (make-type-def)
           (lookup :|int| type-defs) (make-type-def)
           (lookup :|uint| type-defs) (make-type-def)
           (lookup :|i8| type-defs) (make-type-def)
@@ -277,9 +270,7 @@
 (defun make-scope (&optional (parent-scope *builtin-scope*) mexp)
   (%make-scope :mexp mexp
                :var-defs (make-env-chain (scope-var-defs parent-scope))
-               :var-occurs  (make-hash-table :test #'equal)
-               :type-defs (make-env-chain (scope-type-defs parent-scope))
-               :type-occurs (make-hash-table :test #'equal)))
+               :type-defs (make-env-chain (scope-type-defs parent-scope))))
 
 ;;; Main semantic analysis entry
 
@@ -293,7 +284,7 @@
 
 ;;; Basic type building blocks
 
-(defstruct fun-type params return) ; TODO: rename to fun-type
+(defstruct fun-type params return)
 (defstruct array-type elem-type)
 (defstruct struct-type fields)
 (defstruct struct-field name type)
@@ -352,7 +343,6 @@
                :type (make-fun-type :params (process-param-types params scope)
                                     :return (process-type return-type scope)))))
        (;; [param1:type1 param2 param3:type3 ...]
-
         (qly-array :value params)
         (setf (lookup fname (scope-var-defs scope))
               (make-var-def
@@ -389,11 +379,11 @@
                                         signature
                                         mexp*)))
 
-     (when (qly-symbol-p fname)
-       (let ((scope (make-scope scope mexp)))
-         (setf (gethash fname scopes) scope)
-         (setf (gethash mexp scopes) scope)
-         (analyze-type-mexp* mexp* scope scopes))))))
+     (if (qly-symbol-p fname)
+         (let ((scope (make-scope scope mexp)))
+           (setf (gethash mexp scopes) scope)
+           (analyze-type-mexp* mexp* scope scopes))
+         (error "function name must be a symbol")))))
 
 (defun process-param-types (params scope)
   (mapcar (lambda (param)
@@ -412,11 +402,13 @@
          symbol
          (error "Cannot find type ~a" symbol)))
     ((qly-array :value value)
+     (print type)
+     (print value)
      (cond
        ((every 'colon-exp-p value) (make-struct-type :fields (process-field-types value scope)))
        (t (match value
             ((list elem-type) (make-array-type :elem-type (process-type elem-type scope)))
-            (t (error "Pattern in [] need to be either a type or a list of field:type"))))))
+            (_ (error "Pattern in [] need to be either a type or a list of field:type"))))))
     ((call-exp :value (qly-symbol :value :|array|)
                :args (qly-array :value (list elem-type)))
      (make-array-type :elem-type (process-type elem-type scope)))
@@ -425,6 +417,12 @@
     ((call-exp :value (qly-symbol :value :|or|) :args (qly-array :value variants))
      (make-or-type :variants (mapcar (lambda (variant) (process-type variant scope))
                                      variants)))
+    ((call-exp :value (qly-symbol :value :|f|)
+               :args (qly-array :value (list (colon-exp :value (qly-array :value types) :colon return-type))))
+     (make-fun-type :params (mapcar (lambda (type)
+                                      (process-type type scope))
+                                    types)
+                    :return (process-type return-type scope)))
     (_ (error "Unknown pattern of type"))))
 
 (defun lookup-type (symbol scope)
@@ -435,7 +433,7 @@
             (match field
               ((colon-exp :value (qly-symbol :value field-name) :colon field-type)
                (make-struct-field :name field-name :type (process-type field-type scope)))
-              (t (error "Field must be symbol:type"))))
+              (_ (error "Field must be symbol:type"))))
           fields))
 
 ;;; Resolve var pass, resolve every var to its definition
@@ -466,7 +464,6 @@
 (defun resolve-var-qly-symbol (qly-symbol scopes scope quote)
   (cond
     ((plusp quote))
-    ;; Maybe detect in parser?
     ((minusp quote) (error "Comma not inside a quote"))
     (t
      (if-let (def (lookup-symbol-def qly-symbol (scope-var-defs scope)))

@@ -108,12 +108,20 @@ v[y:or[string int]]
                     (scope-var-defs (gethash :root (qly-sem-scopes sem))))))
 
 (test define-functions
-      (let ((sem (make-qly-sem
-                  (parse-qly-text
-                   #"
+  (let ((sem (make-qly-sem
+              (parse-qly-text
+               #"
 f[x []]
+f[foo [x]]
+f[bar [x:int y:string]:uint]
+f[high [x:f[[]:nil] y:f[[]:uint]]:f[[uint]:uint]]
 "#))))
-        (analyze-type sem)
-        (print sem)
-        (var-def-env-is `((:|x| . ,(make-fun-type :return :untyped :params nil)))
-                        (scope-var-defs (gethash :root (qly-sem-scopes sem))))))
+    (analyze-type sem)
+    (print sem)
+    (var-def-env-is `((:|x| . ,(make-fun-type :return :untyped :params nil))
+                      (:|foo| . ,(make-fun-type :return :untyped :params (list :untyped)))
+                      (:|bar| . ,(make-fun-type :return :|uint| :params (list :|int| :|string|)))
+                      (:|high| . ,(make-fun-type :return (make-fun-type :return :|uint| :params (list :|uint|))
+                                                 :params (list (make-fun-type :return :|nil| :params ())
+                                                               (make-fun-type :return :|uint| :params ())))))
+                    (scope-var-defs (gethash :root (qly-sem-scopes sem))))))

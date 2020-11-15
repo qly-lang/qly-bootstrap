@@ -5,3 +5,22 @@
     - ~'(@a)~ ok, quote level after array is ~-1~
     - ~''(,@a)~ ok, quote level after array is ~-2~
     - ~'('@a)~ not ok, quote level after array is ~0~
+
+- For a function foo, why saving both foo -> scope-defined-by-foo and mexp-of-foo -> scope-defined-by-foo in scopes?
+  - For foo, you can lookup a function's scope by its qly-symbol (note qly-symbol has its location, therefore, two same named symbol will not conflict)
+    - TODO: ensure hash table can actually lookup by a struct key - done, use :test 'equalp'
+  - For mexp-of-foo, say you have a var defined in body of foo called bar, what scope is bar in? Textually, qly can find which mexp it is in (start, end), and find the smallest scope that contains this range (start, end). After find the scope, you can then lookup definition of bar, given any occur of bar. The reverse is not indexed and may be not needed. In IDE level it's needed as "Find Occurence" or "Find Usage". We might need to index it in compiler, if type inference require it.
+
+Given a qly-symbol, find it's (lexical) scope
+- cache: in a pass, possibly resolve-var, record every var's scope
+- no cache: find smallest scope that enclosing this var
+
+Given the qly-symbol, have its scope.
+- If it's a def, you know it's type
+- If it's a occur, you know it's def
+
+Two thing consider to cache:
+- symbol -> scope mapping
+  - also make scopes only store mexp -> scope mapping, use another hash table to keep symbol -> scope mapping
+- scope -> lookup def by symbol name (already have)
+- def -> occurs mapping
