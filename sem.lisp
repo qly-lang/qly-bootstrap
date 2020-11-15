@@ -12,10 +12,12 @@
    :qly-sem-qly-ast
    :qly-sem-scopes
    :scope-var-defs
+   :scope-type-defs
    :analyze-type
    :resolve-var
    :make-qly-sem
    :var-def-type
+   :type-def-def
    :array-type
    :make-array-type
    :array-type-elem-type
@@ -150,14 +152,21 @@
                 (format stream "~a: ~a" (car kv)
                         (var-def-type (cdr kv)))
                 (pprint-exit-if-list-exhausted)
-                (pprint-newline :mandatory stream)))))
+                (pprint-newline :mandatory stream))))
+      (pprint-logical-block (stream nil)
+        (pprint-indent :block 0 stream)
+        (pprint-newline :mandatory stream)))
 
     (when-let (type-defs (hash-table-alist (env-chain-%env (scope-type-defs scope))))
-      (pprint-indent :block 0 stream)
-      (pprint-newline :mandatory stream)
       (write-string "TYPE-DEFS: " stream)
       (pprint-indent :block 2 stream)
-      (pprint-newline :mandatory stream))))
+      (pprint-newline :mandatory stream)
+      (pprint-logical-block (stream type-defs)
+        (loop (let ((kv (pprint-pop)))
+                (format stream "~a: ~a" (car kv)
+                        (type-def-def (cdr kv)))
+                (pprint-exit-if-list-exhausted)
+                (pprint-newline :mandatory stream)))))))
 
 (defstruct var-def mexp type)
 (defstruct occur mexp)
@@ -363,8 +372,10 @@
     (;; t[type typedef]
      (call-exp :value (qly-symbol :value :|t|) :args
                (qly-array :value (list (qly-symbol :value type)
-                                       (mexp :value typedef))))
-     (setf (lookup type (scope-type-defs scope)) (process-type type typedef scope)))) )
+                                       typedef)))
+     (setf (lookup type (scope-type-defs scope))
+           (make-type-def :mexp mexp
+                          :def (process-type typedef scope))))) )
 
 ;; In third pass, go inside fun body, recursively process three passes
 ;; TODO: we did not go into other mexp that might have f[], such as block[... f[]]

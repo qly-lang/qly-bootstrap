@@ -8,32 +8,16 @@
 (in-suite analyze-type-definition)
 
 (defun var-def-env-is (expect env)
-  (is (= (length expect) (hash-table-count (qly.sem::env-chain-%env env))))
   (loop for (var . type) in expect
-        do (is (type-equal type
-                           (var-def-type (gethash var (qly.sem::env-chain-%env env)))))))
+        do (is (equalp type
+                       (var-def-type (gethash var (qly.sem::env-chain-%env env))))))
+  (is (= (length expect) (hash-table-count (qly.sem::env-chain-%env env)))))
 
-(defun type-equal (t1 t2)
-  (when (eql (type-of t1) (type-of t2))
-    (typecase t1
-      (array-type (type-equal (array-type-elem-type t1) (array-type-elem-type t2)))
-      (struct-type (and (= (length (struct-type-fields t1))
-                           (length (struct-type-fields t2)))
-                        (every (lambda (field1 field2)
-                                 (and
-                                  (eql (struct-field-name field1)
-                                       (struct-field-name field2))
-                                  (type-equal (struct-field-type field1)
-                                              (struct-field-type field2))))
-                               (struct-type-fields t1)
-                               (struct-type-fields t2))))
-      (or-type (and (= (length (or-type-variants t1))
-                       (length (or-type-variants t2)))
-                    (every 'type-equal (or-type-variants t1) (or-type-variants t2))))
-      (fun-type (and (type-equal (fun-type-return t1) (fun-type-return t2))
-                     (= (length (fun-type-params t1)) (length (fun-type-params t2)))
-                     (every 'type-equal (fun-type-params t1) (fun-type-params t2))))
-      (t (equal t1 t2)))))
+(defun type-def-env-is (expect env)
+  (loop for (type . def) in expect
+        do (is (equalp def
+                       (type-def-def (gethash type (qly.sem::env-chain-%env env))))))
+  (is (= (length expect) (hash-table-count (qly.sem::env-chain-%env env)))))
 
 (test define-vars
   (let ((sem (make-qly-sem
@@ -125,3 +109,65 @@ f[high [x:f[[]:nil] y:f[[]:uint]]:f[[uint]:uint]]
                                                  :params (list (make-fun-type :return :|nil| :params ())
                                                                (make-fun-type :return :|uint| :params ())))))
                     (scope-var-defs (gethash :root (qly-sem-scopes sem))))))
+
+(test simple-type-def
+  (let ((sem (make-qly-sem
+              (parse-qly-text
+               #"
+t[a int]
+t[b a]
+"#))))
+    (analyze-type sem)
+    (type-def-env-is `((:|a| . :|int|)
+                       (:|b| . :|a|))
+                     (scope-type-defs (gethash :root (qly-sem-scopes sem))))))
+
+(test complex-type-def
+  (let ((sem (make-qly-sem
+              (parse-qly-text
+               #"
+t[a f[[int]:int]]
+t[b [int]]
+t[c array[int]]
+t[d [c:int]]
+t[e struct[e:int]]
+t[f or[a b]]
+"#))))
+    (analyze-type sem)
+    (type-def-env-is `((:|a| . ,(make-fun-type :return :|int| :params (list :|int|)))
+                       (:|b| . ,(make-array-type :elem-type :|int|))
+                       (:|c| . ,(make-array-type :elem-type :|int|))
+                       (:|d| . ,(make-struct-type :fields (list (make-struct-field :name :|c| :type :|int|))))
+                       (:|e| . ,(make-struct-type :fields (list (make-struct-field :name :|e| :type :|int|))))
+                       (:|f| . ,(make-or-type :variants (list :|a| :|b|))))
+                     (scope-type-defs (gethash :root (qly-sem-scopes sem))))))
+
+(test recursive-type-def
+  (let ((sem (make-qly-sem
+              (parse-qly-text
+               #"
+t[tree or[[node:data left:tree right:tree] leaf]]
+t[leaf data]
+t[data int]
+
+t[type1 or[type2 int]]
+t[type2 [type1]]
+"#))))
+    (analyze-type sem)
+    (type-def-env-is `((:|tree| . ,(make-or-type :variants
+                                                 (list
+                                                  (make-struct-type
+                                                   :fields
+                                                   (list
+                                                    (make-struct-field :name :|node| :type :|data|)
+                                                    (make-struct-field :name :|left| :type :|tree|)
+                                                    (make-struct-field :name :|right| :type :|tree|)))
+                                                  :|leaf|)))
+                       (:|leaf| . :|data|)
+                       (:|data| . :|int|)
+                       (:|type1| . ,(make-or-type :variants
+                                                  (list
+                                                   :|type2|
+                                                   :|int|)))
+                       (:|type2| . ,(make-array-type :elem-type :|type1|)))
+                     (scope-type-defs (gethash :root (qly-sem-scopes sem))))))
