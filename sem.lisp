@@ -174,6 +174,23 @@
 (defstruct occur mexp)
 (defstruct type-def mexp def)
 
+;;; Basic type building blocks
+
+(defstruct fun-type params return)
+(defstruct array-type elem-type)
+(defstruct struct-type fields)
+(defstruct struct-field name type)
+(defstruct or-type variants)
+(defstruct op-type params return)
+
+(defmethod print-object :around ((obj fun-type) stream)
+  (if *print-readably*
+      (call-next-method)
+      (debug-print-fun-type obj stream)))
+
+(defun debug-print-fun-type (fun-type stream)
+  (format stream "f[[~{~a~^ ~}]:~a]" (fun-type-params fun-type) (fun-type-return fun-type)))
+
 (defparameter *builtin-var-defs*
   (let ((var-defs (make-env-chain)))
     (setf
@@ -181,9 +198,9 @@
      (lookup :|true| var-defs) (make-var-def)
      (lookup :|false| var-defs) (make-var-def)
 
-     (lookup :|v| var-defs) (make-var-def)
-     (lookup :|f| var-defs) (make-var-def)
-     (lookup :|t| var-defs) (make-var-def)
+     (lookup :|v| var-defs) (make-var-def :type (make-op-type :return :|symbol|))
+     (lookup :|f| var-defs) (make-var-def :type (make-op-type :return :|symbol|))
+     (lookup :|t| var-defs) (make-var-def :type (make-op-type :return :|symbol|))
      (lookup :|block| var-defs) (make-var-def)
      (lookup :|if| var-defs) (make-var-def)
      (lookup :|while| var-defs) (make-var-def)
@@ -191,28 +208,29 @@
      (lookup :|break| var-defs) (make-var-def)
      (lookup :|return| var-defs) (make-var-def)
      (lookup :|set| var-defs) (make-var-def)
-     (lookup :|+| var-defs) (make-var-def)
-     (lookup :|-| var-defs) (make-var-def)
-     (lookup :|*| var-defs) (make-var-def)
-     (lookup :|/| var-defs) (make-var-def)
-     (lookup :|**| var-defs) (make-var-def)
-     (lookup :|is| var-defs) (make-var-def)
-     (lookup :|=| var-defs) (make-var-def)
-     (lookup :|!=| var-defs) (make-var-def)
-     (lookup :|>| var-defs) (make-var-def)
-     (lookup :|<| var-defs) (make-var-def)
-     (lookup :|>=| var-defs) (make-var-def)
-     (lookup :|<=| var-defs) (make-var-def)
-     (lookup :|>>| var-defs) (make-var-def)
-     (lookup :|<<| var-defs) (make-var-def)
-     (lookup :|&| var-defs) (make-var-def)
-     (lookup :\| var-defs) (make-var-def)
-     (lookup :|^| var-defs) (make-var-def)
-     (lookup :|and| var-defs) (make-var-def)
-     (lookup :|or| var-defs) (make-var-def)
-     (lookup :|not| var-defs) (make-var-def)
+     (lookup :|+| var-defs) (make-var-def :type (make-fun-type :params (list (make-array-type :elem-type :|number|)) :return :|number|))
+     (lookup :|-| var-defs) (make-var-def :type (make-fun-type :params (list (make-array-type :elem-type :|number|)) :return :|number|))
+     (lookup :|*| var-defs) (make-var-def :type (make-fun-type :params (list (make-array-type :elem-type :|number|)) :return :|number|))
+     (lookup :|/| var-defs) (make-var-def :type (make-fun-type :params (list (make-array-type :elem-type :|number|)) :return :|number|))
+     (lookup :|**| var-defs) (make-var-def :type (make-fun-type :params (list (make-array-type :elem-type :|number|)) :return :|number|))
+     (lookup :|is| var-defs) (make-var-def :type (make-fun-type :params (list (make-array-type :elem-type :|any|)) :return :|bool|))
+     (lookup :|=| var-defs) (make-var-def :type (make-fun-type :params (list (make-array-type :elem-type :|any|)) :return :|bool|))
+     (lookup :|!=| var-defs) (make-var-def :type (make-fun-type :params (list (make-array-type :elem-type :|any|)) :return :|bool|))
+     (lookup :|>| var-defs) (make-var-def :type (make-fun-type :params (list (make-array-type :elem-type :|any|)) :return :|bool|))
+     (lookup :|<| var-defs) (make-var-def :type (make-fun-type :params (list (make-array-type :elem-type :|any|)) :return :|bool|))
+     (lookup :|>=| var-defs) (make-var-def :type (make-fun-type :params (list (make-array-type :elem-type :|any|)) :return :|bool|))
+     (lookup :|<=| var-defs) (make-var-def :type (make-fun-type :params (list (make-array-type :elem-type :|any|)) :return :|bool|))
+     (lookup :|>>| var-defs) (make-var-def :type (make-fun-type :params (list :|fixnum| :|fixnum| :return :|fixnum|)))
+     (lookup :|<<| var-defs) (make-var-def :type (make-fun-type :params (list :|fixnum| :|fixnum|) :return :|fixnum|))
+     (lookup :|&| var-defs) (make-var-def :type (make-fun-type :params (list :|fixnum| :|fixnum|) :return :|fixnum|))
+     (lookup :\| var-defs) (make-var-def :type (make-fun-type :params (list :|fixnum| :|fixnum|) :return :|fixnum|))
+     (lookup :|!| var-defs) (make-var-def :type (make-fun-type :params (list :|fixnum|) :return :|fixnum|))
+     (lookup :|^| var-defs) (make-var-def :type (make-fun-type :params (list :|fixnum| :|fixnum|) :return :|fixnum|))
+     (lookup :|and| var-defs) (make-var-def :type (make-op-type :params (list (make-array-type :elem-type :|bool|)) :return :|bool|))
+     (lookup :|or| var-defs) (make-var-def :type (make-op-type :params (list (make-array-type :elem-type :|bool|)) :return :|bool|))
+     (lookup :|not| var-defs) (make-var-def :type (make-fun-type :params (list :|bool|) :return :|bool|))
 
-     (lookup :|length| var-defs) (make-var-def)
+     (lookup :|length| var-defs) (make-var-def :type (make-fun-type :params (list (make-or-type :variants (list (make-array-type :elem-type :|any|) :|string|)) :return :|uint|)))
      (lookup :|slice| var-defs) (make-var-def)
      (lookup :|append| var-defs) (make-var-def)
      (lookup :|concat| var-defs) (make-var-def)
@@ -246,21 +264,31 @@
      ;;; std extended
      (lookup :|for| var-defs) (make-var-def)
      (lookup :|cond| var-defs) (make-var-def)
-     (lookup :|++| var-defs) (make-var-def)
-     (lookup :|--| var-defs) (make-var-def))
+     (lookup :|++| var-defs) (make-var-def :type (make-fun-type :params (list :|number|) :return :|number|))
+     (lookup :|--| var-defs) (make-var-def :type (make-fun-type :params (list :|number|) :return :|number|)))
     var-defs))
 
 (defparameter *builtin-type-defs*
   (let ((type-defs (make-env-chain)))
     (setf (lookup :|nil| type-defs) (make-type-def)
           (lookup :|symbol| type-defs) (make-type-def)
-          (lookup :|int| type-defs) (make-type-def)
-          (lookup :|uint| type-defs) (make-type-def)
+          (lookup :|int| type-defs) (make-type-def
+                                     :def (make-or-type
+                                           :variants
+                                           (list :|fixint| :|bigint|)))
+          (lookup :|uint| type-defs) (make-type-def
+                                      :def (make-or-type
+                                            :variants
+                                            (list :|fixuint| :|biguint|)))
           (lookup :|i8| type-defs) (make-type-def)
           (lookup :|i16| type-defs) (make-type-def)
           (lookup :|i32| type-defs) (make-type-def)
           (lookup :|i64| type-defs) (make-type-def)
           (lookup :|i128| type-defs) (make-type-def)
+          (lookup :|fixint| type-defs) (make-type-def
+                                        :def (make-or-type
+                                              :variants
+                                              (list :|i8| :|i16| :|i32| :|i128|)))
           (lookup :|bigint| type-defs) (make-type-def)
           (lookup :|biguint| type-defs) (make-type-def)
           (lookup :|u8| type-defs) (make-type-def)
@@ -268,11 +296,25 @@
           (lookup :|u32| type-defs) (make-type-def)
           (lookup :|u64| type-defs) (make-type-def)
           (lookup :|u128| type-defs) (make-type-def)
+          (lookup :|fixuint| type-defs) (make-type-def
+                                         :def (make-or-type
+                                               :variants
+                                               (list :|u8| :|u16| :|u32| :|u64| :|u128|)))
+          (lookup :|fixnum| type-defs) (make-type-def
+                                        :def (make-or-type
+                                              :variants
+                                              (list :|fixint| :|fixuint|)))
           (lookup :|string| type-defs) (make-type-def)
-          (lookup :|real| type-defs) (make-type-def)
+          (lookup :|real| type-defs) (make-type-def
+                                      :def (make-or-type
+                                            :variants
+                                            (list :|f32| :|f64| :|decimal|)))
           (lookup :|f32| type-defs) (make-type-def)
           (lookup :|f64| type-defs) (make-type-def)
           (lookup :|decimal| type-defs) (make-type-def)
+          (lookup :|number| type-defs) (make-or-type
+                                        :variants
+                                        (list :|int| :|uint| :|real|))
           (lookup :|bool| type-defs) (make-type-def))
     type-defs))
 (defparameter *builtin-scope*
@@ -293,22 +335,6 @@
     (resolve-var qly-sem)
     ;; (check-error qly-sem)
     ))
-
-;;; Basic type building blocks
-
-(defstruct fun-type params return)
-(defstruct array-type elem-type)
-(defstruct struct-type fields)
-(defstruct struct-field name type)
-(defstruct or-type variants)
-
-(defmethod print-object :around ((obj fun-type) stream)
-  (if *print-readably*
-      (call-next-method)
-      (debug-print-fun-type obj stream)))
-
-(defun debug-print-fun-type (fun-type stream)
-  (format stream "f[[~{~a~^ ~}]:~a]" (fun-type-params fun-type) (fun-type-return fun-type)))
 
 ;;; Analyze type pass, fill var-defs and type-defs in all scopes
 

@@ -2,7 +2,7 @@
 * DONE parser tests <2020-11-08 Sun>
   SCHEDULED: <2020-06-20 Sat>
 * TODO type and semantic analysis stage 1
-** TODO no inference type analysis
+** DONE no inference type analysis
 ** TODO var refer to
 ** TODO type error check
 ** TODO type analysis tests

@@ -43,3 +43,31 @@ In short, default should give a balanced performance and binary size in most use
 ~f[foo:X:'cd]~
 TO mark a function argument as runtime time dispatch:
 ~f[foo:X:'rd]~
+
+Should operator typed?
+Advantage of typed operator:
+- uniform semantic error checking
+- user defined macros can also be typed, make them look and behave exactly same as builtin operators
+- type inferencer will be benefit, for example and[x y] infers x and y to be bool, and user can type less. (Or if there's type inference confliction will lead to compilation error)
+
+Will that too complicated and too overhead for builtin operators?
+Take ~v~ as an example:
+#+BEGIN_SRC
+v[x 3]
+v[x]
+v[x:int]
+v[x:int 3]
+#+END_SRC
+~v~ have four kinds of format, should define all of them:
+#+BEGIN_SRC
+v[symbol mexp]
+v[symbol]
+v[symbol:mexp] # or v[symbol:type]?
+v[symbol:mexp mexp] # or v[symbol:type mexp-eval-to-type]?
+#+END_SRC
+
+It sounds interesting and promising, however, complicated at beginning, consider in a future qly. If that happens, that's possible going to be full qly defined by a code spec, operator spec describes how operator form and semantic, then a true meta compiler (compare to fake Yet Another Compiler Compiler :), will take this spec and generate a compiler for qly. But some places like ~and~ and ~or~ it benefits the type inferencer, so these ones we give them a type. Also, besides typed, qly compiler program have other implied restrictions which is also in qly doc, such as ~v~ must be of above four forms, and in the fourth form ~mexp-eval-to-type~ and ~type~ forms a semantic restriction.
+
+As the initial version of qly, there's no meta type or thing like meta object protocol. ~t~ returns the symbol that names defined type. This symbol is helpful in functions that take a symbol type as a parameter and in macro writings.
+
+Before protocol type, there does not allow function on different type have same name (except for ones that already use match inside)
