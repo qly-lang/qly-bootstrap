@@ -7,6 +7,12 @@
 ** TODO type error check
 ** TODO type analysis tests
 * first interpreter
+** Basic cli interface:
+- qly file.qly: build and run qly
+- qly: launch qly REPL
+- qly build: build project, start from build.qly or main.qly
+- qly build file.qly: build file.qly
+- qly test: test project, start from test.qly
 * first compiler, llvm target
 * enough lib for self bootstrap
 

@@ -24,12 +24,12 @@
               (parse-qly-text
                #"v[x:int 3]
 v[y:string]
-v[aaa:array[u32]]
+v[aaa:array[uint32]]
 v[bbb:symbol 'x]"#))))
     (analyze-type sem)
     (var-def-env-is `((:|x| . :|int|)
                       (:|y| . :|string|)
-                      (:|aaa| . ,(make-array-type :elem-type :|u32|))
+                      (:|aaa| . ,(make-array-type :elem-type :|uint32|))
                       (:|bbb| . :|symbol|))
                     (scope-var-defs (gethash :root (qly-sem-scopes sem))))))
 

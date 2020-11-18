@@ -2,13 +2,13 @@ use[ink-core.storage]
 
 ink.storage[
 t[Incrementer r[
-    value : storage.Value[i32]
-    my-value: storage.HashMap[AccountId u64]
+    value : storage.Value[int32]
+    my-value: storage.HashMap[AccountId uint64]
 ]]
 ]
 
 ink.contructor[
-f[new [self:Incrementer init-value:i32]
+f[new [self:Incrementer init-value:int32]
     set[self.value init-value]]
 
 f[default [self:Incrementer]
@@ -16,15 +16,15 @@ f[default [self:Incrementer]
 ]
 
 ink.message[
-f[get [self:Incrementer]:i32
+f[get [self:Incrementer]:int32
     self.value]
 
-f[inc [self:Incrementer]:i32
+f[inc [self:Incrementer]:int32
     self.my-value-or-zero[self.env[].caller[]]]
 
 ]
 
-f[my-value-or-zero [self:Incrementer of:AccountId]:u64
+f[my-value-or-zero [self:Incrementer of:AccountId]:uint64
     v[value self.my-value.get[of].unwrap-or[0]]
     value
 ]

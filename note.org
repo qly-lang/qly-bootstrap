@@ -71,3 +71,6 @@ It sounds interesting and promising, however, complicated at beginning, consider
 As the initial version of qly, there's no meta type or thing like meta object protocol. ~t~ returns the symbol that names defined type. This symbol is helpful in functions that take a symbol type as a parameter and in macro writings.
 
 Before protocol type, there does not allow function on different type have same name (except for ones that already use match inside)
+
+Do you need to allocate an activation record for function invocation? Can an IR directly handle this?
+Yes LLVM IR can handle this by providing a function obj in the llvm lib. Coolgate IR can do something similar. Allocate an activation record is in step of code generation where backend like llvm or coolgate should handle.
