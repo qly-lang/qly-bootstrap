@@ -79,13 +79,14 @@
 
 (defun lookup-symbol-def (qly-symbol env)
   (if-let (def (lookup/direct (qly-symbol-value qly-symbol) env))
-    (if (> (qly-symbol-start qly-symbol)
-           (call-exp-end (var-def-mexp def)))
+    (if (or (null (var-def-mexp def)) ; pos null is builtin
+            (> (mexp-start qly-symbol)
+               (mexp-end (var-def-mexp def))))
         def
-        (when-let ((parent (env-chain-%parent env)))
-          (lookup-symbol-def name parent)))
-    (when-let ((parent (env-chain-%parent env)))
-      (lookup-symbol-def name parent))))
+        (when-let (parent (env-chain-%parent env))
+          (lookup-symbol-def qly-symbol parent)))
+    (when-let (parent (env-chain-%parent env))
+      (lookup-symbol-def qly-symbol parent))))
 
 (defun (setf lookup) (new-value name env)
   (setf (gethash name (env-chain-%env env)) new-value))
@@ -217,10 +218,10 @@
      (lookup :|is| var-defs) (make-var-def :type (make-fun-type :params (list (make-array-type :elem-type :|any|)) :return :|bool|))
      (lookup :|=| var-defs) (make-var-def :type (make-fun-type :params (list (make-array-type :elem-type :|any|)) :return :|bool|))
      (lookup :|!=| var-defs) (make-var-def :type (make-fun-type :params (list (make-array-type :elem-type :|any|)) :return :|bool|))
-     (lookup :|>| var-defs) (make-var-def :type (make-fun-type :params (list (make-array-type :elem-type :|any|)) :return :|bool|))
-     (lookup :|<| var-defs) (make-var-def :type (make-fun-type :params (list (make-array-type :elem-type :|any|)) :return :|bool|))
-     (lookup :|>=| var-defs) (make-var-def :type (make-fun-type :params (list (make-array-type :elem-type :|any|)) :return :|bool|))
-     (lookup :|<=| var-defs) (make-var-def :type (make-fun-type :params (list (make-array-type :elem-type :|any|)) :return :|bool|))
+     (lookup :|>| var-defs) (make-var-def :type (make-fun-type :params (list (make-array-type :elem-type :|number|)) :return :|bool|))
+     (lookup :|<| var-defs) (make-var-def :type (make-fun-type :params (list (make-array-type :elem-type :|number|)) :return :|bool|))
+     (lookup :|>=| var-defs) (make-var-def :type (make-fun-type :params (list (make-array-type :elem-type :|number|)) :return :|bool|))
+     (lookup :|<=| var-defs) (make-var-def :type (make-fun-type :params (list (make-array-type :elem-type :|number|)) :return :|bool|))
      (lookup :|>>| var-defs) (make-var-def :type (make-fun-type :params (list :|fixnum| :|fixnum| :return :|fixnum|)))
      (lookup :|<<| var-defs) (make-var-def :type (make-fun-type :params (list :|fixnum| :|fixnum|) :return :|fixnum|))
      (lookup :|&| var-defs) (make-var-def :type (make-fun-type :params (list :|fixnum| :|fixnum|) :return :|fixnum|))
@@ -494,42 +495,49 @@
 ;;; Resolve var pass, resolve every var to its definition
 
 (defun resolve-var (qly-sem)
-  (loop for mexp in (qly-ast-sem* (qly-sem-qly-ast qly-sem))
-        do (resolve-var-mexp mexp (qly-sem-scopes qly-sem) (gethash :root (qly-sem-scopes qly-sem)) 0)))
+  (loop for mexp in (qly-ast-mexp* (qly-sem-qly-ast qly-sem))
+        do (resolve-var-mexp mexp
+                             (qly-sem-symbol-scopes qly-sem)
+                             (qly-sem-scopes qly-sem)
+                             :root
+                             0)))
 
-(defun resolve-var-mexp (mexp scopes scope quote)
+(defun resolve-var-mexp (mexp symbol-scopes scopes scope quote)
   (match mexp
-    ((dot-exp :value value :prop prop)
-     (resolve-var-mexp value scopes scope quote)
-     (resolve-var-mexp prop scopes scope quote))
-    ((quote-exp :value value)
-     (resolve-var-mexp value scopes scope (1+ quote)))
-    ((unquote-exp :value value)
-     (resolve-var-mexp value scopes scope (1- quote)))
-    ((splice-exp :value value)
-     (resolve-var-mexp value scopes scope (1- quote)))
-    ((call-exp)
-     (resolve-var-call-exp mexp scopes scope quote))
     ((qly-symbol)
-     (resolve-var-qly-symbol mexp scopes scope quote))
-    ((qly-array :value mexp*)
-     (loop for mexp in mexp*
-           do (resolve-var-mexp mexp scopes scope quote)))))
+     (resolve-var-qly-symbol mexp symbol-scopes scopes scope quote))
 
-(defun resolve-var-qly-symbol (qly-symbol scopes scope quote)
+    ;; ((dot-exp :value value :prop prop)
+    ;;  (resolve-var-mexp value scopes scope quote)
+    ;;  (resolve-var-mexp prop scopes scope quote))
+    ;; ((quote-exp :value value)
+    ;;  (resolve-var-mexp value scopes scope (1+ quote)))
+    ;; ((unquote-exp :value value)
+    ;;  (resolve-var-mexp value scopes scope (1- quote)))
+    ;; ((splice-exp :value value)
+    ;;  (resolve-var-mexp value scopes scope (1- quote)))
+    ;; ((call-exp)
+    ;;  (resolve-var-call-exp mexp scopes scope quote))
+    ;; ((qly-array :value mexp*)
+    ;;  (loop for mexp in mexp*
+    ;;        do (resolve-var-mexp mexp scopes scope quote)))
+    ))
+
+(defun resolve-var-qly-symbol (qly-symbol symbol-scopes scopes scope quote)
   (cond
     ((plusp quote))
     ((minusp quote) (error "Comma not inside a quote"))
     (t
-     (if-let (def (lookup-symbol-def qly-symbol (scope-var-defs scope)))
-       (setf (lookup qly-symbol scopes) scope
-             (lookup qly-symbol (scope-var-occurs scope)) def)
-       (error "Cannot resolve var")))))
+     (if-let (def (lookup-symbol-def qly-symbol (scope-var-defs (gethash scope scopes))))
+       (progn (setf (gethash qly-symbol symbol-scopes) scope
+                    ;; TODO: also add qly-symbol to def's occurs
+                    ))
+       (error "Cannot resolve var ~a" qly-symbol)))))
 
 (defun resolve-var-call-exp (call-exp scopes scope quote)
   (when-let (fdef (resolve-var-qly-symbol (call-exp-value call-exp) scopes scope quote))
     (cond
-      ((builtin-fdef-p fdef)
+      ((builtin-op-p fdef)
        (resolve-var-builtin-fdef call-exp scopes scope quote))
       (t
        (loop for mexp in (qly-array-value (call-exp-args call-exp))

@@ -215,3 +215,13 @@ f[foo [var1]
                         (:|var3| . :|type1|)
                         (:|var1| . :untyped))
                       (scope-var-defs foo-scope)))))
+
+(def-suite resolve-vars)
+(in-suite resolve-vars)
+
+(test resolve-toplevel-symbol
+  (let ((sem (make-qly-sem (parse-qly-text #"
+true
+"#))))
+    (analyze-type sem)
+    (resolve-var sem)))

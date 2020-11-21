@@ -74,3 +74,47 @@ Before protocol type, there does not allow function on different type have same 
 
 Do you need to allocate an activation record for function invocation? Can an IR directly handle this?
 Yes LLVM IR can handle this by providing a function obj in the llvm lib. Coolgate IR can do something similar. Allocate an activation record is in step of code generation where backend like llvm or coolgate should handle.
+
+Protocol Type / Parametric Polymorphism question 2
+Assume a protocol type array-like
+#+BEGIN_SRC
+t[array-like
+  p[array element
+    f[get[array uint]:element]
+    f[append[array element]:array]]]
+#+END_SRC
+Now define a function:
+#+BEGIN_SRC
+f[append2 [a1:array-like.array e1:array-like.element]:array-like.array
+  append[a1 e1]]
+#+END_SRC
+But, what if
+#+BEGIN_SRC
+f[append3 [a1 e1 a2 e2]
+  append[a1 e1]
+  append[a2 e2]]
+#+END_SRC
+Of course this can be type inferred most of time, but how to express ~append3~ type? Easiest:
+#+BEGIN_SRC
+f[append3 [a1 e1:array-like[a1 e1] a2 e2:array-like[a2 e2]]:e1]
+#+END_SRC
+What if
+#+BEGIN_SRC
+f[append4 [a1 e1 a2 e2]
+  append[a1 e1]
+  append[a2 e2]
+  append[a1 e2]]
+#+END_SRC
+This infer to:
+#+BEGIN_SRC
+array-like[a1 e1]
+array-like[a2 e2]
+array-like[a1 e2]
+#+END_SRC
+But this does not mean e1 must be same type of e2. Protocol type notation above only specify: with whom a parameter forms a protocol what, but not some type has to or can be not same as another type. In above case, e2 satisfy two protocol type. But any param can only satisfy one protocol type. Because of this, qly will define an implicit protocol type that include three append relation.
+
+Also, qly doesn't have way to restrict two type to be same. For example:
+#+BEGIN_SRC
+f[foo [x:any y:any]]
+#+END_SRC
+x simply can be any type, same or not same as y. They can be optimized to specialized no matter x need to be same or not as y. When ~foo~ called with two same type, for example int, it's optimized to a ~f[foo [int int]]~ call, have same efficient result as a parametric polymorphism language. There's no good reason to limit x must be same as y.
