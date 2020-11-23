@@ -1,6 +1,6 @@
 (in-package :cl-user)
 (defpackage :qly.sem
-  (:use :cl :qly.parser)
+  (:use :cl :qly.parser :qly.util)
   (:import-from :trivia :match)
   (:import-from :alexandria :if-let :when-let :hash-table-keys :hash-table-alist)
   (:export
@@ -203,13 +203,13 @@
      (lookup :|v| var-defs) (make-var-def :type (make-op-type :return :|symbol|))
      (lookup :|f| var-defs) (make-var-def :type (make-op-type :return :|symbol|))
      (lookup :|t| var-defs) (make-var-def :type (make-op-type :return :|symbol|))
-     (lookup :|block| var-defs) (make-var-def)
-     (lookup :|if| var-defs) (make-var-def)
-     (lookup :|while| var-defs) (make-var-def)
-     (lookup :|continue| var-defs) (make-var-def)
-     (lookup :|break| var-defs) (make-var-def)
-     (lookup :|return| var-defs) (make-var-def)
-     (lookup :|set| var-defs) (make-var-def)
+     (lookup :|block| var-defs) (make-var-def :type (make-op-type))
+     (lookup :|if| var-defs) (make-var-def :type (make-op-type))
+     (lookup :|while| var-defs) (make-var-def :type (make-op-type))
+     (lookup :|continue| var-defs) (make-var-def :type (make-op-type))
+     (lookup :|break| var-defs) (make-var-def :type (make-op-type))
+     (lookup :|return| var-defs) (make-var-def :type (make-op-type))
+     (lookup :|set| var-defs) (make-var-def :type (make-or-type))
      (lookup :|+| var-defs) (make-var-def :type (make-fun-type :params (list (make-array-type :elem-type :|number|)) :return :|number|))
      (lookup :|-| var-defs) (make-var-def :type (make-fun-type :params (list (make-array-type :elem-type :|number|)) :return :|number|))
      (lookup :|*| var-defs) (make-var-def :type (make-fun-type :params (list (make-array-type :elem-type :|number|)) :return :|number|))
@@ -242,12 +242,12 @@
      (lookup :|shallow-copy| var-defs) (make-var-def :type (make-fun-type :params (list :|any|) :return :|any|))
      (lookup :|copy| var-defs) (make-var-def :type (make-fun-type :params (list :|any|) :return :|any|))
      (lookup :|r| var-defs) (make-var-def :type (make-fun-type :params (list :|any|) :return :|any|))
-     (lookup :|ffi| var-defs) (make-var-def)
-     (lookup :|syscall| var-defs) (make-var-def)
+     (lookup :|ffi| var-defs) (make-var-def :type (make-fun-type))
+     (lookup :|syscall| var-defs) (make-var-def :type (make-fun-type))
 
      ;;; std extended
-     (lookup :|for| var-defs) (make-var-def)
-     (lookup :|cond| var-defs) (make-var-def)
+     (lookup :|for| var-defs) (make-var-def :type (make-op-type))
+     (lookup :|cond| var-defs) (make-var-def :type (make-op-type))
      (lookup :|++| var-defs) (make-var-def :type (make-fun-type :params (list :|number|) :return :|number|))
      (lookup :|--| var-defs) (make-var-def :type (make-fun-type :params (list :|number|) :return :|number|)))
     var-defs))
@@ -292,13 +292,13 @@
           (lookup :|char| type-defs) (make-type-def
                                       :def (make-or-type
                                             :variants (list :|uint8| :|uint16| :|uint32|)))
-          (lookup :|ascii-char| type-defs) (make-type-def :def (make-range-type :start 0 :end 128))
+          (lookup :|ascii-char| type-defs) (make-type-def :def (make-range-type :start 0 :end 127))
           (lookup :|char| type-defs) (make-type-def :def (make-or-type
                                                           :variants
                                                           (list :|ascii-char|
-                                                                (make-range-type :start 128 :end 2048)
-                                                                (make-range-type :start 2048 :end 65536)
-                                                                (make-range-type :start 65536 :end 1114112))))
+                                                                (make-range-type :start 128 :end 2047)
+                                                                (make-range-type :start 2048 :end 65535)
+                                                                (make-range-type :start 65536 :end 1114111))))
           (lookup :|string| type-defs) (make-type-def :def (make-array-type :elem-type :|char|))
           (lookup :|real| type-defs) (make-type-def
                                       :def (make-or-type
@@ -328,9 +328,7 @@
   (let ((qly-sem (make-qly-sem qly-ast)))
     ;; Passes of semantic analysis
     (analyze-type qly-sem)
-    (resolve-var qly-sem)
-    ;; (check-error qly-sem)
-    ))
+    (resolve-var qly-sem)))
 
 ;;; Analyze type pass, fill var-defs and type-defs in all scopes
 
@@ -395,6 +393,7 @@
 (defun analyze-type-mexp-out2 (mexp scope)
   (match mexp
     (;; t[type typedef]
+     ;; TODO: catch loop
      (call-exp :value (qly-symbol :value :|t|) :args
                (qly-array :value (list (qly-symbol :value type)
                                        typedef)))
@@ -492,7 +491,7 @@
               (_ (error "Field must be symbol:type"))))
           fields))
 
-;;; Resolve var pass, resolve every var to its definition
+;;; Resolve var pass, resolve every var to its definition, check type errors
 
 (defun resolve-var (qly-sem)
   (loop for mexp in (qly-ast-mexp* (qly-sem-qly-ast qly-sem))
@@ -506,7 +505,8 @@
   (match mexp
     ((qly-symbol)
      (resolve-var-qly-symbol mexp symbol-scopes scopes scope quote))
-
+    ((colon-exp)
+     (error "colon exp can only appeared in var, type and function definition"))
     ;; ((dot-exp :value value :prop prop)
     ;;  (resolve-var-mexp value scopes scope quote)
     ;;  (resolve-var-mexp prop scopes scope quote))
@@ -516,12 +516,11 @@
     ;;  (resolve-var-mexp value scopes scope (1- quote)))
     ;; ((splice-exp :value value)
     ;;  (resolve-var-mexp value scopes scope (1- quote)))
-    ;; ((call-exp)
-    ;;  (resolve-var-call-exp mexp scopes scope quote))
-    ;; ((qly-array :value mexp*)
-    ;;  (loop for mexp in mexp*
-    ;;        do (resolve-var-mexp mexp scopes scope quote)))
-    ))
+    ((qly-array :value mexp*)
+     (loop for mexp in mexp*
+           do (resolve-var-mexp mexp symbol-scopes scopes scope quote)))
+    ((call-exp)
+     (resolve-var-call-exp mexp symbol-scopes scopes scope quote))))
 
 (defun resolve-var-qly-symbol (qly-symbol symbol-scopes scopes scope quote)
   (cond
@@ -531,19 +530,62 @@
      (if-let (def (lookup-symbol-def qly-symbol (scope-var-defs (gethash scope scopes))))
        (progn (setf (gethash qly-symbol symbol-scopes) scope
                     ;; TODO: also add qly-symbol to def's occurs
-                    ))
+                    )
+              (var-def-type def))
        (error "Cannot resolve var ~a" qly-symbol)))))
 
-(defun resolve-var-call-exp (call-exp scopes scope quote)
-  (when-let (fdef (resolve-var-qly-symbol (call-exp-value call-exp) scopes scope quote))
-    (cond
-      ((builtin-op-p fdef)
-       (resolve-var-builtin-fdef call-exp scopes scope quote))
-      (t
-       (loop for mexp in (qly-array-value (call-exp-args call-exp))
-             do (resolve-var-mexp mexp scopes scope quote))))))
+(defun resolve-var-call-exp (call-exp symbol-scopes scopes scope quote)
+  (match (call-exp-value call-exp)
+    ((call-exp)
+     (error "Unimplemented consequtive call exp"))
+    ((qly-symbol)
+     (let ((type (resolve-var-qly-symbol (call-exp-value call-exp) scopes scope quote)))
+       (cond
+         ((builtin-op-p type)
+          ;; An operation
+          (resolve-var-builtin-op call-exp symbol-scopes scopes scope quote))
+         ((array-type-p type)
+          ;; array access
+          (assert (list1p (array-exp-value (call-exp-args call-exp))))
+          (let ((mexp-type (resolve-var-mexp (car (array-exp-value (call-exp-args call-exp))) symbol-scopes scopes scope quote)))
+            (assert (type-ok mexp-type (lookup-type :|uint| :root)))
+            (array-type-elem-type type)))
+         (t
+          ;; A function call
+          (assert (fun-type-p type))
+          (fun-arg-type-ok (loop for mexp in (qly-array-value (call-exp-args call-exp))
+                                 collect (resolve-var-mexp mexp scopes scope quote))
+                           type)
+          (fun-type-return type)))))
+    ((dot-exp)
+     (error "Unimplemented dot exp call"))))
 
-(defun resolve-var-builtin-fdef (call-exp scopes scope quote)
+(defun type-ok-expanded (actual expected)
+  (or (equalp actual expected)
+      (eql expected :|any|)
+      (when (or-type-p expected)
+        (some (lambda (variant)
+                (type-ok-expanded actual variant))
+              (or-type-variants expected)))
+      (when (array-type-p expected)
+        (type-ok-expanded (array-type-elem-type actual) (array-type-elem-type expected)))
+      (when (struct-type-p expected)
+        )
+      (when (fun-type-p expected)
+        )))
+
+(defun type-ok (actual expected)
+  (or (equalp actual expanded)
+      (let ((actual-expanded (expend-type actual))
+            (expected-expanded (expend-type expended)))
+        (or (equalp actual-expanded expected-expanded)
+            (eql expected-expanded :|any|)
+            ()))))
+
+(defun builtin-op-p (def)
+  (op-type-p (var-def-type def)))
+
+(defun resolve-var-builtin-op (call-exp scopes symbol-scopes scope quote)
   (match call-exp
     ((call-exp :value (qly-symbol :value :|f|)
                :args (qly-array :value (list* (qly-symbol :value fname) _ mexp*)))
@@ -556,8 +598,3 @@
     ;; TODO: more builtin special ops and fs
 
     ))
-
-
-;;; Check error pass, check type error and other semantic erros
-
-(defun check-error (qly-sem))

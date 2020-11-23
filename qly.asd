@@ -12,7 +12,8 @@
                :esrap
                :parse-float
                :apply-argv)
-  :components ((:file "parser")
+  :components ((:file "util")
+               (:file "parser")
                (:file "sem")
                (:file "translator")
                (:file "compiler")

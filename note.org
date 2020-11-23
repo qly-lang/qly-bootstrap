@@ -118,3 +118,147 @@ Also, qly doesn't have way to restrict two type to be same. For example:
 f[foo [x:any y:any]]
 #+END_SRC
 x simply can be any type, same or not same as y. They can be optimized to specialized no matter x need to be same or not as y. When ~foo~ called with two same type, for example int, it's optimized to a ~f[foo [int int]]~ call, have same efficient result as a parametric polymorphism language. There's no good reason to limit x must be same as y.
+
+Assume there's no import, every qly is only one file, no namespace now. How to resolve ~a.b~?
+If a is a record type, and b is a known field, then ~.~ means field access
+If a is not a record type, or a doesn't have record field, then ~.~ means function call ~b[a]~
+
+If a is not a symbol, instead an expression, check whether it return type is a field type, has field type b. This means to resolve a call exp, must already know types.
+
+Do you really need quote unquote?
+- In function programming, you can construct array via array literal, no quote is needed.
+- In macro programmming, for example, make a ~while~ based on ~loop~ and ~if~:
+#+BEGIN_SRC
+m[while[condition:mexp body:[mexp]]
+  'loop[if[not[,mexp]
+            break[]]
+         @body]]
+#+END_SRC
+
+Without quote exp this become more difficult:
+#+BEGIN_SRC
+m[while[condition:mexp body:[mexp]]
+  call-exp['loop call-exp['if call-exp['not mexp] 'break[]]] body]
+
+#+END_SRC
+Not easier
+
+Is or type really good and necessary compare to subtype (subclass)
+Example: Exp, includes AExp and BExp.
+Use or:
+#+BEGIN_SRC
+t[Exp or[AExp BExp]]
+#+END_SRC
+Problem, if adding a C, you must add a CExp by modify Exp type definition
+
+Use subtype:
+#+BEGIN_SRC
+<:[AExp Exp]
+<:[BExp Exp]
+#+END_SRC
+If adding a C, it can be add without modify existing code. But, consider
+#+BEGIN_SRC
+t[List or[cons[car:Elem cdr:List] Nil]]
+#+END_SRC
+Can this be expressed by subtype? Yes
+#+BEGIN_SRC
+abstract[List]
+<:[Nil List]
+<:[cons[car:Elem cdr:List] List] # or <:[NonNil List] and t[NonNil cons[...]]
+#+END_SRC
+Can a type be a type of several types? Yes
+Can a concrete type extended by a subtype? No, you can create a new abstract type, make the concrete type as one subtype of the abstract type and make new type (either concrete or abstract) as new subtypes of the new abstract type.
+Polymorphism? Easy, define function on abstract types, that can take both abstract and concrete types.
+#+BEGIN_SRC
+abstract[Printable]
+<:[number Printable]
+<:[string Printable]
+
+f[print [x:Printable] ...]
+
+f[[x:string]
+  ...
+  print[x]]
+#+END_SRC
+
+Do you need Parametric Types?
+Use case:
+1. compile time generic type
+2. constraint different types to be same or one type is same as one's parameter
+
+#+BEGIN_SRC
+f[my-append [x:[any] y:any]:[any]]
+my-append[["aa" "bb"] "cc"] # happens to be same, can compile to a my-append-string
+my-append[[3 4] 5] # happens to be same, can compile to a my-append-int
+my-append[["ab" "c"] 4] # not same, compile to dynamic dispatch version
+
+f[my-append2 [x:[any] y:any x1:[any] y2:any]:[any]]
+# Do you have to specify y's any is same as x's and y2's any is same as x1's element, and return type is same as y[2]? Can qly auto figure out that and auto specialize my-append2 in compilation?
+
+#+END_SRC
+
+But unless you can analyze all possible kinds of input, it's not possible to predicate return type above is of same type as y, y2, or neither (really? How does type inferencer work? Type inferencer requires you to annote [any]'s relationship of one return args, there's no way to specify what it's relationship between args type without such annotation)
+But, what if you can specify return type is same as which's return type?? Do you still need parametric types then?
+#+BEGIN_SRC
+f[my-append2 [x:[any] y:any x1:[any] y2:any]:t[x]]
+#+END_SRC
+Still not, you don't know structure of what my-append2 called, for example it may call my-append. It might be possible if you annotate all function this way, but this also hard and hard to reasoning.
+
+What if adding parametric type?
+#+BEGIN_SRC
+f[my-append[t] [x:[t] y:t]:[t]]
+#+END_SRC
+What if t must satisfy some constraints, for example, subtype of Printable,
+#+BEGIN_SRC
+f[my-append[t:Printable] [x:[t] y:t]:[t]]
+#+END_SRC
+Of course all these types are most of time type inferred, you write
+#+BEGIN_SRC
+f[my-append [x y]
+  append[x y]]
+#+END_SRC
+will infer
+#+BEGIN_SRC
+f[my-append[t] [x:[t] y:t]:[t]]
+#+END_SRC
+You write
+#+BEGIN_SRC
+f[my-append [x y]
+  print[x]
+  append[x y]]
+#+END_SRC
+will infer
+#+BEGIN_SRC
+f[my-append[t [t]:printable] [x:[t] y:t]:[t]]
+#+END_SRC
+etc.
+
+How is printable defined? How?
+1. There is ~print[x]~
+2. There're many definitions of ~print[x]~,
+#+BEGIN_SRC
+m[print [x:string]]
+m[print [x:int]]
+gf[print [x:printable]]
+t[printable]
+t[int:printable]
+t[string:printable]
+#+END_SRC
+major challenge is how to link an abstract type to an abstract function definition. Above present a solution.
+- If you add a new type in printable - you need
+#+BEGIN_SRC
+t[n:printable]
+m[print [x:n]]
+#+END_SRC
+- If you need add a new operation, say, debug-print, to all printable, you can either create a f, take advantage of gf, or create a gf, customize every type by m.
+
+So since you know gf[print [x:printable]] you immediately knows
+#+BEGIN_SRC
+f[my-append [x y]
+  print[x]
+  append[x y]]
+#+END_SRC
+will infer
+#+BEGIN_SRC
+f[my-append[t [t]:printable] [x:[t] y:t]:[t]]
+#+END_SRC

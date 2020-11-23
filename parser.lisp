@@ -318,6 +318,9 @@
 
 (defmethod to-sexp ((obj call-exp))
   (cons (to-sexp (call-exp-value obj))
+        ;; TODO call-exp does not need a nested array! even after self bootstrap:
+        ;; call-exp: call-exp-value:mexp call-exp-args:array (this does not need to be array-exp, since it's not really an array-exp)
+        ;; array-exp: array-exp-value:array
         (mapcar 'to-sexp (qly-array-value (call-exp-args obj)))))
 
 (defmethod to-sexp ((obj quote-exp))
