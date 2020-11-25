@@ -29,9 +29,6 @@
    :struct-type-fields
    :struct-field-name
    :struct-field-type
-   :make-or-type
-   :or-type-variants
-   :or-type
    :fun-type
    :make-fun-type
    :fun-type-params
@@ -173,7 +170,7 @@
 
 (defstruct var-def mexp type)
 (defstruct occur mexp)
-(defstruct type-def mexp def)
+(defstruct type-def mexp def parents children)
 
 ;;; Basic type building blocks
 
@@ -182,7 +179,6 @@
 (defstruct array-type elem-type)
 (defstruct struct-type fields)
 (defstruct struct-field name type)
-(defstruct or-type variants)
 (defstruct op-type params return)
 
 (defmethod print-object :around ((obj fun-type) stream)
@@ -209,7 +205,7 @@
      (lookup :|continue| var-defs) (make-var-def :type (make-op-type))
      (lookup :|break| var-defs) (make-var-def :type (make-op-type))
      (lookup :|return| var-defs) (make-var-def :type (make-op-type))
-     (lookup :|set| var-defs) (make-var-def :type (make-or-type))
+     (lookup :|set| var-defs) (make-var-def :type (make-op-type))
      (lookup :|+| var-defs) (make-var-def :type (make-fun-type :params (list (make-array-type :elem-type :|number|)) :return :|number|))
      (lookup :|-| var-defs) (make-var-def :type (make-fun-type :params (list (make-array-type :elem-type :|number|)) :return :|number|))
      (lookup :|*| var-defs) (make-var-def :type (make-fun-type :params (list (make-array-type :elem-type :|number|)) :return :|number|))
@@ -252,28 +248,25 @@
      (lookup :|--| var-defs) (make-var-def :type (make-fun-type :params (list :|number|) :return :|number|)))
     var-defs))
 
+(defun set-super-type (child parent)
+  (pushnew (type-def-parents children) parent
+           (type-def-children parent) child))
+
+(defparameter *any-type* (make-type-def))
+
 (defparameter *builtin-type-defs*
   (let ((type-defs (make-env-chain)))
     (setf (lookup :|nil| type-defs) (make-type-def)
-          (lookup :|any| type-defs) (make-type-def)
+          (lookup :|any| type-defs) *any-type*
           (lookup :|symbol| type-defs) (make-type-def)
-          (lookup :|int| type-defs) (make-type-def
-                                     :def (make-or-type
-                                           :variants
-                                           (list :|fixint| :|bigint|)))
-          (lookup :|uint| type-defs) (make-type-def
-                                      :def (make-or-type
-                                            :variants
-                                            (list :|fixuint| :|biguint|)))
+          (lookup :|int| type-defs) (make-type-def)
+          (lookup :|uint| type-defs) (make-type-def)
           (lookup :|int8| type-defs) (make-type-def)
           (lookup :|int16| type-defs) (make-type-def)
           (lookup :|int32| type-defs) (make-type-def)
           (lookup :|int64| type-defs) (make-type-def)
           (lookup :|int128| type-defs) (make-type-def)
-          (lookup :|fixint| type-defs) (make-type-def
-                                        :def (make-or-type
-                                              :variants
-                                              (list :|int8| :|int16| :|int32| :|int128|)))
+          (lookup :|fixint| type-defs) (make-type-def)
           (lookup :|bigint| type-defs) (make-type-def)
           (lookup :|biguint| type-defs) (make-type-def)
           (lookup :|uint8| type-defs) (make-type-def)
@@ -281,37 +274,42 @@
           (lookup :|uint32| type-defs) (make-type-def)
           (lookup :|uint64| type-defs) (make-type-def)
           (lookup :|uint128| type-defs) (make-type-def)
-          (lookup :|fixuint| type-defs) (make-type-def
-                                         :def (make-or-type
-                                               :variants
-                                               (list :|uint8| :|uint16| :|uint32| :|uint64| :|uint128|)))
-          (lookup :|fixnum| type-defs) (make-type-def
-                                        :def (make-or-type
-                                              :variants
-                                              (list :|fixint| :|fixuint|)))
-          (lookup :|char| type-defs) (make-type-def
-                                      :def (make-or-type
-                                            :variants (list :|uint8| :|uint16| :|uint32|)))
+          (lookup :|fixuint| type-defs) (make-type-def)
+          (lookup :|fixnum| type-defs) (make-type-def)
           (lookup :|ascii-char| type-defs) (make-type-def :def (make-range-type :start 0 :end 127))
-          (lookup :|char| type-defs) (make-type-def :def (make-or-type
-                                                          :variants
-                                                          (list :|ascii-char|
-                                                                (make-range-type :start 128 :end 2047)
-                                                                (make-range-type :start 2048 :end 65535)
-                                                                (make-range-type :start 65536 :end 1114111))))
+          (lookup :|char| type-defs) (make-type-def :def (make-range-type :start 0 :end 1114111))
           (lookup :|string| type-defs) (make-type-def :def (make-array-type :elem-type :|char|))
-          (lookup :|real| type-defs) (make-type-def
-                                      :def (make-or-type
-                                            :variants
-                                            (list :|f32| :|f64| :|decimal|)))
-          (lookup :|f32| type-defs) (make-type-def)
-          (lookup :|f64| type-defs) (make-type-def)
+          (lookup :|real| type-defs) (make-type-def)
+          (lookup :|float32| type-defs) (make-type-def)
+          (lookup :|float64| type-defs) (make-type-def)
           (lookup :|decimal| type-defs) (make-type-def)
-          (lookup :|number| type-defs) (make-or-type
-                                        :variants
-                                        (list :|int| :|uint| :|real|))
+          (lookup :|number| type-defs) (make-type-def)
           (lookup :|bool| type-defs) (make-type-def)
           (lookup :|mexp| type-defs) (make-type-def))
+
+    (set-super-type (lookup :|fixint| typedefs) (lookup :|int| typedefs))
+    (set-super-type (lookup :|bigint| typedefs) (lookup :|int| typedefs))
+    (set-super-type (lookup :|fixuint| typedefs) (lookup :|uint| typedefs))
+    (set-super-type (lookup :|biguint| typedefs) (lookup :|uint| typdefs))
+    (set-super-type (lookup :|int8| typedefs) (lookup :|fixint| typedefs))
+    (set-super-type (lookup :|int16| typedefs) (lookup :|fixint| typedefs))
+    (set-super-type (lookup :|int32| typedefs) (lookup :|fixint| typedefs))
+    (set-super-type (lookup :|int64| typedefs) (lookup :|fixint| typedefs))
+    (set-super-type (lookup :|int128| typedefs) (lookup :|fixint| typedefs))
+    (set-super-type (lookup :|uint8| typedefs) (lookup :|fixuint| typedefs))
+    (set-super-type (lookup :|uint16| typedefs) (lookup :|fixuint| typedefs))
+    (set-super-type (lookup :|uint32| typedefs) (lookup :|fixuint| typedefs))
+    (set-super-type (lookup :|uint64| typedefs) (lookup :|fixuint| typedefs))
+    (set-super-type (lookup :|uint128| typedefs) (lookup :|fixuint| typedefs))
+    (set-super-type (lookup :|fixint| typedefs) (lookup :|fixnum| typedefs))
+    (set-super-type (lookup :|fixuint| typedefs) (lookup :|fixnum| typedefs))
+    (set-super-type (lookup :|ascii-char|) typedefs) (lookup :|char| typedefs)
+    (set-super-type (lookup :|float32| typedefs) (lookup :|real| typedefs))
+    (set-super-type (lookup :|float64| typedefs) (lookup :|real| typedefs))
+    (set-super-type (lookup :|int| typedefs) (lookup :|number| typedefs))
+    (set-super-type (lookup :|uint| typedefs) (lookup :|uint| typedefs))
+    (set-super-type (lookup :|real| typedefs) (lookup :|real| typedefs))
+
     type-defs))
 (defparameter *builtin-scope*
   (%make-scope :var-defs *builtin-var-defs*
@@ -381,25 +379,70 @@
                :mexp mexp
                :type (make-fun-type :params (process-param-types params scope)
                                     :return :untyped))))))
-    (;; t[type typedef]
+    (;; t[type]
+     ;; t[type:supertype]
+     ;; t[type typedef]
+     ;; t[type:supertype typedef]
      (call-exp :value (qly-symbol :value :|t|) :args
-               (qly-array :value (list (qly-symbol :value type)
-                                       (mexp :value typedef))))
-     (setf (lookup type (scope-type-defs scope)) :unprocessed)))
-  ;; TODO: should catch malformed v[] f[] and t[] (maybe in a later pass)
+               (qly-array :value args))
+     (match args
+       (;; t[type] or t[type typedef]
+        (list* (qly-symbol :value type) maybe-typedef)
+        (unless (or (null maybe-typedef) (list1p maybe-typedef))
+          (error "expect t[type] or t[type typedef]"))
+        (if (lookup/direct type (scope-type-defs scope))
+            (error "type ~a is already defined in this scope" type)
+            (setf (lookup type (scope-type-defs scope)) :unprocessed)))
+       (;; t[type:supertype]
+        (list (colon-exp :value (qly-symbol :value type)
+                         :colon (qly-symbol :value supertype)))
+        (unless (lookup/direct type (scope-type-defs scope))
+          (setf (lookup type (scope-type-defs scope)) :unprocessed)))
+       (;; t[type:supertype typedef]
+        (list (colon-exp :value (qly-symbol :value type)
+                         :colon (qly-symbol :value supertype))
+              type-def)
+        (if (lookup/direct type (scope-type-defs scope))
+            (error "type ~a is already defined in this scope" type)
+            (setf (lookup type (scope-type-defs scope)) :unprocessed)))
+       (_ (error "Expect t[type], t[type:supertype], t[type typedef] or t[type:supertype typedef]")))))
+  ;; TODO: should catch malformed f[] and v[] (maybe in a later pass)
   )
 
 ;; In second pass, insert all type with all type definition, for recursive typedef
 (defun analyze-type-mexp-out2 (mexp scope)
   (match mexp
-    (;; t[type typedef]
+    (;; t[...]
      ;; TODO: catch loop
      (call-exp :value (qly-symbol :value :|t|) :args
-               (qly-array :value (list (qly-symbol :value type)
-                                       typedef)))
-     (setf (lookup type (scope-type-defs scope))
-           (make-type-def :mexp mexp
-                          :def (process-type typedef scope))))) )
+               (qly-array :value args))
+     (match args
+       ((list (qly-symbol :value type))
+        (let ((typedef (make-type-def :mexp mexp)))
+          (set-super-type typedef *any-type*)
+          (setf (lookup type (scope-type-defs scope))
+                typedef))
+        ((list (qly-symbol :value type) typedef)
+         (let ((typedef (make-type-def :mexp mexp
+                                       :def (process-type typedef scope))))
+           (set-super-type typedef *any-type*)
+           (setf (lookup type (scope-type-defs scope))
+                 typedef))))
+       ((list (colon-exp :value (qly-symbol :value type)
+                         :colon (qly-symbol :value supertype)))
+        (let ((typedef (make-type-def :mexp mexp))
+              (supertype (lookup supertype (scope-type-defs scope))))
+          (set-super-type typedef *any-type*)
+          (set-super-type typedef supertype)
+          (setf (lookup type (scope-type-defs scope)) typedef)))
+       ((list (colon-exp :value (qly-symbol :value type)
+                         :colon (qly-symbol :value supertype))
+              typedef)
+        (let ((typedef (make-type-def :mexp mexp :def (process-type typedef scope)))
+              (supertype (lookup supertype (scope-type-defs scope))))
+          (set-super-type typedef *any-type*)
+          (set-super-type typedef supertype)
+          (setf (lookup type (scope-type-defs scope)))))))))
 
 ;; In third pass, go inside fun body, recursively process three passes
 ;; TODO: we did not go into other mexp that might have f[], such as block[... f[]]
@@ -469,9 +512,6 @@
      (make-array-type :elem-type (process-type elem-type scope)))
     ((call-exp :value (qly-symbol :value :|struct|) :args (qly-array :value field-types))
      (make-struct-type :fields (process-field-types field-types scope)))
-    ((call-exp :value (qly-symbol :value :|or|) :args (qly-array :value variants))
-     (make-or-type :variants (mapcar (lambda (variant) (process-type variant scope))
-                                     variants)))
     ((call-exp :value (qly-symbol :value :|f|)
                :args (qly-array :value (list (colon-exp :value (qly-array :value types) :colon return-type))))
      (make-fun-type :params (mapcar (lambda (type)
@@ -563,10 +603,6 @@
 (defun type-ok-expanded (actual expected)
   (or (equalp actual expected)
       (eql expected :|any|)
-      (when (or-type-p expected)
-        (some (lambda (variant)
-                (type-ok-expanded actual variant))
-              (or-type-variants expected)))
       (when (array-type-p expected)
         (type-ok-expanded (array-type-elem-type actual) (array-type-elem-type expected)))
       (when (struct-type-p expected)

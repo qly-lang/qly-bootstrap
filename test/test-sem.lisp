@@ -51,64 +51,55 @@ v[b:array[[string]]]
                     (scope-var-defs (gethash :root (qly-sem-scopes sem))))))
 
 (test define-structs
-  (let ((sem (make-qly-sem
-              (parse-qly-text
-               #"v[x:struct[x:string]]
+      (let ((sem (make-qly-sem
+                  (parse-qly-text
+                   #"v[x:struct[x:string]]
 v[y:[y:string]]
 v[z:[x:string y:[y:string] z:[string] a:[[x:string]]]]
 "#))))
-    (analyze-type sem)
-    (var-def-env-is `((:|x| . ,(make-struct-type :fields (list (make-struct-field :name :|x| :type :|string|))))
-                      (:|y| . ,(make-struct-type :fields (list (make-struct-field :name :|y| :type :|string|))))
-                      (:|z| . ,(make-struct-type
-                                :fields
-                                (list
-                                 (make-struct-field :name :|x| :type :|string|)
-                                 (make-struct-field
-                                  :name :|y|
-                                  :type (make-struct-type
-                                         :fields (list
-                                                  (make-struct-field :name :|y| :type :|string|))))
-                                 (make-struct-field
-                                  :name :|z|
-                                  :type (make-array-type :elem-type :|string|))
-                                 (make-struct-field
-                                  :name :|a|
-                                  :type (make-array-type :elem-type
-                                                         (make-struct-type
-                                                          :fields (list (make-struct-field
-                                                                         :name :|x|
-                                                                         :type :|string|)))))))))
-                    (scope-var-defs (gethash :root (qly-sem-scopes sem))))))
+        (analyze-type sem)
+        (var-def-env-is `((:|x| . ,(make-struct-type :fields (list (make-struct-field :name :|x| :type :|string|))))
+                          (:|y| . ,(make-struct-type :fields (list (make-struct-field :name :|y| :type :|string|))))
+                          (:|z| . ,(make-struct-type
+                                    :fields
+                                    (list
+                                     (make-struct-field :name :|x| :type :|string|)
+                                     (make-struct-field
+                                      :name :|y|
+                                      :type (make-struct-type
+                                             :fields (list
+                                                      (make-struct-field :name :|y| :type :|string|))))
+                                     (make-struct-field
+                                      :name :|z|
+                                      :type (make-array-type :elem-type :|string|))
+                                     (make-struct-field
+                                      :name :|a|
+                                      :type (make-array-type :elem-type
+                                                             (make-struct-type
+                                                              :fields (list (make-struct-field
+                                                                             :name :|x|
+                                                                             :type :|string|)))))))))
+                        (scope-var-defs (gethash :root (qly-sem-scopes sem))))))
 
-(test define-or-types
-  (let ((sem (make-qly-sem
-              (parse-qly-text
-               #"
-v[y:or[string int]]
-"#))))
-    (analyze-type sem)
-    (var-def-env-is `((:|y| . ,(make-or-type :variants (list :|string| :|int|))))
-                    (scope-var-defs (gethash :root (qly-sem-scopes sem))))))
 
 (test define-functions
-  (let ((sem (make-qly-sem
-              (parse-qly-text
-               #"
+      (let ((sem (make-qly-sem
+                  (parse-qly-text
+                   #"
 f[x []]
 f[foo [x]]
 f[bar [x:int y:string]:uint]
 f[high [x:f[[]:nil] y:f[[]:uint]]:f[[uint]:uint]]
 "#))))
-    (analyze-type sem)
-    (print sem)
-    (var-def-env-is `((:|x| . ,(make-fun-type :return :untyped :params nil))
-                      (:|foo| . ,(make-fun-type :return :untyped :params (list :untyped)))
-                      (:|bar| . ,(make-fun-type :return :|uint| :params (list :|int| :|string|)))
-                      (:|high| . ,(make-fun-type :return (make-fun-type :return :|uint| :params (list :|uint|))
-                                                 :params (list (make-fun-type :return :|nil| :params ())
-                                                               (make-fun-type :return :|uint| :params ())))))
-                    (scope-var-defs (gethash :root (qly-sem-scopes sem))))))
+        (analyze-type sem)
+        (print sem)
+        (var-def-env-is `((:|x| . ,(make-fun-type :return :untyped :params nil))
+                          (:|foo| . ,(make-fun-type :return :untyped :params (list :untyped)))
+                          (:|bar| . ,(make-fun-type :return :|uint| :params (list :|int| :|string|)))
+                          (:|high| . ,(make-fun-type :return (make-fun-type :return :|uint| :params (list :|uint|))
+                                                     :params (list (make-fun-type :return :|nil| :params ())
+                                                                   (make-fun-type :return :|uint| :params ())))))
+                        (scope-var-defs (gethash :root (qly-sem-scopes sem))))))
 
 (test simple-type-def
   (let ((sem (make-qly-sem
@@ -123,35 +114,36 @@ t[b a]
                      (scope-type-defs (gethash :root (qly-sem-scopes sem))))))
 
 (test complex-type-def
-  (let ((sem (make-qly-sem
-              (parse-qly-text
-               #"
+      (let ((sem (make-qly-sem
+                  (parse-qly-text
+                   #"
 t[a f[[int]:int]]
 t[b [int]]
 t[c array[int]]
 t[d [c:int]]
 t[e struct[e:int]]
-t[f or[a b]]
 "#))))
-    (analyze-type sem)
-    (type-def-env-is `((:|a| . ,(make-fun-type :return :|int| :params (list :|int|)))
-                       (:|b| . ,(make-array-type :elem-type :|int|))
-                       (:|c| . ,(make-array-type :elem-type :|int|))
-                       (:|d| . ,(make-struct-type :fields (list (make-struct-field :name :|c| :type :|int|))))
-                       (:|e| . ,(make-struct-type :fields (list (make-struct-field :name :|e| :type :|int|))))
-                       (:|f| . ,(make-or-type :variants (list :|a| :|b|))))
-                     (scope-type-defs (gethash :root (qly-sem-scopes sem))))))
+        (analyze-type sem)
+        (type-def-env-is `((:|a| . ,(make-fun-type :return :|int| :params (list :|int|)))
+                           (:|b| . ,(make-array-type :elem-type :|int|))
+                           (:|c| . ,(make-array-type :elem-type :|int|))
+                           (:|d| . ,(make-struct-type :fields (list (make-struct-field :name :|c| :type :|int|))))
+                           (:|e| . ,(make-struct-type :fields (list (make-struct-field :name :|e| :type :|int|))))                          )
+                         (scope-type-defs (gethash :root (qly-sem-scopes sem))))))
 
 (test recursive-type-def
   (let ((sem (make-qly-sem
               (parse-qly-text
                #"
-t[tree or[[node:data left:tree right:tree] leaf]]
-t[leaf data]
+t[tree]
+t[node struct[node:data left:tree right:tree]]
+t[leaf:tree data]
 t[data int]
+t[node:tree]
 
-t[type1 or[type2 int]]
-t[type2 [type1]]
+t[type1]
+t[type2:type1 [type1]]
+t[int:type1]
 "#))))
     (analyze-type sem)
     (type-def-env-is `((:|tree| . ,(make-or-type :variants
