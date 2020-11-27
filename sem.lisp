@@ -249,8 +249,8 @@
     var-defs))
 
 (defun set-super-type (child parent)
-  (pushnew (type-def-parents children) parent
-           (type-def-children parent) child))
+  (pushnew parent (type-def-parents child))
+  (pushnew child (type-def-children parent)))
 
 (defparameter *any-type* (make-type-def))
 
@@ -287,28 +287,28 @@
           (lookup :|bool| type-defs) (make-type-def)
           (lookup :|mexp| type-defs) (make-type-def))
 
-    (set-super-type (lookup :|fixint| typedefs) (lookup :|int| typedefs))
-    (set-super-type (lookup :|bigint| typedefs) (lookup :|int| typedefs))
-    (set-super-type (lookup :|fixuint| typedefs) (lookup :|uint| typedefs))
-    (set-super-type (lookup :|biguint| typedefs) (lookup :|uint| typdefs))
-    (set-super-type (lookup :|int8| typedefs) (lookup :|fixint| typedefs))
-    (set-super-type (lookup :|int16| typedefs) (lookup :|fixint| typedefs))
-    (set-super-type (lookup :|int32| typedefs) (lookup :|fixint| typedefs))
-    (set-super-type (lookup :|int64| typedefs) (lookup :|fixint| typedefs))
-    (set-super-type (lookup :|int128| typedefs) (lookup :|fixint| typedefs))
-    (set-super-type (lookup :|uint8| typedefs) (lookup :|fixuint| typedefs))
-    (set-super-type (lookup :|uint16| typedefs) (lookup :|fixuint| typedefs))
-    (set-super-type (lookup :|uint32| typedefs) (lookup :|fixuint| typedefs))
-    (set-super-type (lookup :|uint64| typedefs) (lookup :|fixuint| typedefs))
-    (set-super-type (lookup :|uint128| typedefs) (lookup :|fixuint| typedefs))
-    (set-super-type (lookup :|fixint| typedefs) (lookup :|fixnum| typedefs))
-    (set-super-type (lookup :|fixuint| typedefs) (lookup :|fixnum| typedefs))
-    (set-super-type (lookup :|ascii-char|) typedefs) (lookup :|char| typedefs)
-    (set-super-type (lookup :|float32| typedefs) (lookup :|real| typedefs))
-    (set-super-type (lookup :|float64| typedefs) (lookup :|real| typedefs))
-    (set-super-type (lookup :|int| typedefs) (lookup :|number| typedefs))
-    (set-super-type (lookup :|uint| typedefs) (lookup :|uint| typedefs))
-    (set-super-type (lookup :|real| typedefs) (lookup :|real| typedefs))
+    (set-super-type (lookup :|fixint| type-defs) (lookup :|int| type-defs))
+    (set-super-type (lookup :|bigint| type-defs) (lookup :|int| type-defs))
+    (set-super-type (lookup :|fixuint| type-defs) (lookup :|uint| type-defs))
+    (set-super-type (lookup :|biguint| type-defs) (lookup :|uint| type-defs))
+    (set-super-type (lookup :|int8| type-defs) (lookup :|fixint| type-defs))
+    (set-super-type (lookup :|int16| type-defs) (lookup :|fixint| type-defs))
+    (set-super-type (lookup :|int32| type-defs) (lookup :|fixint| type-defs))
+    (set-super-type (lookup :|int64| type-defs) (lookup :|fixint| type-defs))
+    (set-super-type (lookup :|int128| type-defs) (lookup :|fixint| type-defs))
+    (set-super-type (lookup :|uint8| type-defs) (lookup :|fixuint| type-defs))
+    (set-super-type (lookup :|uint16| type-defs) (lookup :|fixuint| type-defs))
+    (set-super-type (lookup :|uint32| type-defs) (lookup :|fixuint| type-defs))
+    (set-super-type (lookup :|uint64| type-defs) (lookup :|fixuint| type-defs))
+    (set-super-type (lookup :|uint128| type-defs) (lookup :|fixuint| type-defs))
+    (set-super-type (lookup :|fixint| type-defs) (lookup :|fixnum| type-defs))
+    (set-super-type (lookup :|fixuint| type-defs) (lookup :|fixnum| type-defs))
+    (set-super-type (lookup :|ascii-char| type-defs) (lookup :|char| type-defs))
+    (set-super-type (lookup :|float32| type-defs) (lookup :|real| type-defs))
+    (set-super-type (lookup :|float64| type-defs) (lookup :|real| type-defs))
+    (set-super-type (lookup :|int| type-defs) (lookup :|number| type-defs))
+    (set-super-type (lookup :|uint| type-defs) (lookup :|uint| type-defs))
+    (set-super-type (lookup :|real| type-defs) (lookup :|real| type-defs))
 
     type-defs))
 (defparameter *builtin-scope*
@@ -396,7 +396,7 @@
        (;; t[type:supertype]
         (list (colon-exp :value (qly-symbol :value type)
                          :colon (qly-symbol :value supertype)))
-        (unless (lookup/direct type (scope-type-defs scope))
+        (unless (lookup type (scope-type-defs scope))
           (setf (lookup type (scope-type-defs scope)) :unprocessed)))
        (;; t[type:supertype typedef]
         (list (colon-exp :value (qly-symbol :value type)
@@ -417,32 +417,35 @@
      (call-exp :value (qly-symbol :value :|t|) :args
                (qly-array :value args))
      (match args
-       ((list (qly-symbol :value type))
+       (;; t[type]
+        (list (qly-symbol :value type))
         (let ((typedef (make-type-def :mexp mexp)))
           (set-super-type typedef *any-type*)
           (setf (lookup type (scope-type-defs scope))
-                typedef))
-        ((list (qly-symbol :value type) typedef)
-         (let ((typedef (make-type-def :mexp mexp
-                                       :def (process-type typedef scope))))
-           (set-super-type typedef *any-type*)
-           (setf (lookup type (scope-type-defs scope))
-                 typedef))))
-       ((list (colon-exp :value (qly-symbol :value type)
+                typedef)))
+       (;; t[type typedef]
+        (list (qly-symbol :value type) typedef)
+        (let ((typedef (make-type-def :mexp mexp
+                                      :def (process-type typedef scope))))
+          (set-super-type typedef *any-type*)
+          (setf (lookup type (scope-type-defs scope))
+                typedef)))
+       (;; t[type:supertype]
+        (list (colon-exp :value (qly-symbol :value type)
                          :colon (qly-symbol :value supertype)))
-        (let ((typedef (make-type-def :mexp mexp))
+        (let ((typedef (lookup type (scope-type-defs scope)))
               (supertype (lookup supertype (scope-type-defs scope))))
           (set-super-type typedef *any-type*)
-          (set-super-type typedef supertype)
-          (setf (lookup type (scope-type-defs scope)) typedef)))
-       ((list (colon-exp :value (qly-symbol :value type)
+          (set-super-type typedef supertype)))
+       (;; t[type:supertype typedef]
+        (list (colon-exp :value (qly-symbol :value type)
                          :colon (qly-symbol :value supertype))
               typedef)
         (let ((typedef (make-type-def :mexp mexp :def (process-type typedef scope)))
               (supertype (lookup supertype (scope-type-defs scope))))
           (set-super-type typedef *any-type*)
           (set-super-type typedef supertype)
-          (setf (lookup type (scope-type-defs scope)))))))))
+          (setf (lookup type (scope-type-defs scope)) typedef)))))))
 
 ;; In third pass, go inside fun body, recursively process three passes
 ;; TODO: we did not go into other mexp that might have f[], such as block[... f[]]
@@ -579,26 +582,28 @@
     ((call-exp)
      (error "Unimplemented consequtive call exp"))
     ((qly-symbol)
-     (let ((type (resolve-var-qly-symbol (call-exp-value call-exp) scopes scope quote)))
+     (let ((type (resolve-var-qly-symbol (call-exp-value call-exp) symbol-scopes scopes scope quote)))
        (cond
          ((builtin-op-p type)
           ;; An operation
           (resolve-var-builtin-op call-exp symbol-scopes scopes scope quote))
          ((array-type-p type)
           ;; array access
-          (assert (list1p (array-exp-value (call-exp-args call-exp))))
-          (let ((mexp-type (resolve-var-mexp (car (array-exp-value (call-exp-args call-exp))) symbol-scopes scopes scope quote)))
+          (assert (list1p (qly-array-value (call-exp-args call-exp))))
+          (let ((mexp-type (resolve-var-mexp (car (qly-array-value (call-exp-args call-exp))) symbol-scopes scopes scope quote)))
             (assert (type-ok mexp-type (lookup-type :|uint| :root)))
             (array-type-elem-type type)))
          (t
           ;; A function call
           (assert (fun-type-p type))
           (fun-arg-type-ok (loop for mexp in (qly-array-value (call-exp-args call-exp))
-                                 collect (resolve-var-mexp mexp scopes scope quote))
+                                 collect (resolve-var-mexp mexp symbol-scopes scopes scope quote))
                            type)
           (fun-type-return type)))))
     ((dot-exp)
      (error "Unimplemented dot exp call"))))
+
+(defun fun-arg-type-ok (actual expected))
 
 (defun type-ok-expanded (actual expected)
   (or (equalp actual expected)
@@ -611,12 +616,14 @@
         )))
 
 (defun type-ok (actual expected)
-  (or (equalp actual expanded)
-      (let ((actual-expanded (expend-type actual))
-            (expected-expanded (expend-type expended)))
+  (or (equalp actual expected)
+      (let ((actual-expanded (expand-type actual))
+            (expected-expanded (expand-type expected)))
         (or (equalp actual-expanded expected-expanded)
             (eql expected-expanded :|any|)
             ()))))
+
+(defun expand-type (type))
 
 (defun builtin-op-p (def)
   (op-type-p (var-def-type def)))
@@ -626,11 +633,11 @@
     ((call-exp :value (qly-symbol :value :|f|)
                :args (qly-array :value (list* (qly-symbol :value fname) _ mexp*)))
      (loop for mexp in mexp*
-           do (resolve-var-mexp mexp scopes (gethash fname scopes) quote)))
+           do (resolve-var-mexp mexp scopes symbol-scopes (gethash fname scopes) quote)))
     ((call-exp :value (qly-symbol :value :|v|)
                :args (qly-array :value
                                 (list _ value)))
-     (resolve-var-mexp mexp scopes scope quote))
+     (resolve-var-mexp value scopes symbol-scopes scope quote))
     ;; TODO: more builtin special ops and fs
 
     ))

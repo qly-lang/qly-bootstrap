@@ -262,3 +262,68 @@ will infer
 #+BEGIN_SRC
 f[my-append[t [t]:printable] [x:[t] y:t]:[t]]
 #+END_SRC
+
+Consider writing a compiler, has AExp, BExp, each kind of Exp has Pass1 Pass2.
+In a functional programming language with or type, it looks like
+#+BEGIN_SRC
+def Pass1(exp)
+  match exp
+    AExp => AExp_Pass1(exp)
+    BExp => BExp_Pass1(exp)
+...
+#+END_SRC
+It's easy to add a new Pass, but difficult (need to modify every function) to add a new CExp.
+In a OO language, without using a visitor pattern, it looks like
+#+BEGIN_SRC
+class AExp < Exp
+  def Pass1
+  def Pass2
+...
+
+#+END_SRC
+It's easy to add a new CExp, but difficult (need to modify every class) to add a new Pass3.
+In language based on interface or trait?
+#+BEGIN_SRC
+interface Exp
+  def Pass1
+  def Pass2
+
+impl Exp for AExp
+  def Pass1
+  def Pass2
+#+END_SRC
+
+It's same as OOP, easy to add a new CExp but difficult to add a new Pass. But what if your write:
+#+BEGIN_SRC
+interface Pass1
+  def Pass1
+
+interface Pass2
+  def Pass2
+
+impl Pass1 for AExp
+impl Pass2 for BExp
+...
+type Exp = or AExp BExp ... = and Pass1 Pass2 (Pass1 + Pass2 + ...)
+Or implictly, when declare a XExp, say XExp < Exp,
+and when declare an interface, say PassN add to Pass
+#+END_SRC
+Add a new type: easy, impl PassN for CExp
+Add a new Pass: easy, impl Pass3 for XExp
+
+compile(src):
+  let Exps = parse(src)
+  Pass1(Exps) // dispatch different Pass1 on different kind of Exp
+  Pass2(Exps)
+  Pass3(Exps)
+
+In qly:
+gf[Pass1 [e:Exp]]
+t[AExp1:Exp]
+m[Pass1 [e:AExp1]]
+
+Add a new type: easy, t, and impl methods
+Add a new pass: easy, add a gf, and impl methods
+
+It's easier than the second approach interface, you don't need worry about interface, differ between interface type and concrete type, express Pass = Pass1 + ...
+Exp means Pass, to mean a different thing (sum of interface) you just create another parent type and add children. Besides its simplicity, it's also more powerful as you can do multi dispatch! (although in this example you don't need multi-dispatch)

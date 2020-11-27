@@ -146,21 +146,16 @@ t[type2:type1 [type1]]
 t[int:type1]
 "#))))
     (analyze-type sem)
-    (type-def-env-is `((:|tree| . ,(make-or-type :variants
-                                                 (list
-                                                  (make-struct-type
-                                                   :fields
-                                                   (list
-                                                    (make-struct-field :name :|node| :type :|data|)
-                                                    (make-struct-field :name :|left| :type :|tree|)
-                                                    (make-struct-field :name :|right| :type :|tree|)))
-                                                  :|leaf|)))
+    (print sem)
+    (type-def-env-is `((:|tree| . nil)
+                       (:|node| . ,(make-struct-type :fields
+                                                     (list
+                                                      (make-struct-field :name :|node| :type :|data|)
+                                                      (make-struct-field :name :|left| :type :|tree|)
+                                                      (make-struct-field :name :|right| :type :|tree|))))
                        (:|leaf| . :|data|)
                        (:|data| . :|int|)
-                       (:|type1| . ,(make-or-type :variants
-                                                  (list
-                                                   :|type2|
-                                                   :|int|)))
+                       (:|type1| . nil)
                        (:|type2| . ,(make-array-type :elem-type :|type1|)))
                      (scope-type-defs (gethash :root (qly-sem-scopes sem))))))
 
