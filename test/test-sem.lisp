@@ -19,6 +19,16 @@
                        (type-def-def (gethash type (qly.sem::env-chain-%env env))))))
   (is (= (length expect) (hash-table-count (qly.sem::env-chain-%env env)))))
 
+(defun type-def-env-subtype-has (expect env)
+  (loop for (type . subtype) in expect
+        do (progn
+             (is (= (length subtype)
+                    (length (type-def-children (gethash type (qly.sem::env-chain-%env env))))))
+             (is (every (lambda (subtype subtype-def)
+                          (eql (lookup subtype env) subtype-def))
+                        subtype
+                        (type-def-children (gethash type (qly.sem::env-chain-%env env))))))))
+
 (test define-vars
   (let ((sem (make-qly-sem
               (parse-qly-text
@@ -157,7 +167,10 @@ t[int:type1]
                        (:|data| . :|int|)
                        (:|type1| . nil)
                        (:|type2| . ,(make-array-type :elem-type :|type1|)))
-                     (scope-type-defs (gethash :root (qly-sem-scopes sem))))))
+                     (scope-type-defs (gethash :root (qly-sem-scopes sem))))
+    (type-def-env-subtype-has `((:|tree| . (:|node| :|leaf|))
+                                (:|type1| .(:|int| :|type2|)))
+                              (scope-type-defs (gethash :root (qly-sem-scopes sem))))))
 
 (test var-def-with-defined-type
   (let ((sem (make-qly-sem (parse-qly-text #"

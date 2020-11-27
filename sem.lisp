@@ -20,6 +20,7 @@
    :var-def-mexp
    :type-def-def
    :type-def-mexp
+   :type-def-children
    :array-type
    :make-array-type
    :array-type-elem-type
@@ -433,14 +434,17 @@
        (;; t[type:supertype]
         (list (colon-exp :value (qly-symbol :value type)
                          :colon (qly-symbol :value supertype)))
+        (format t "~%=== set ~a supertype to ~a~%" type supertype)
         (let ((typedef (lookup type (scope-type-defs scope)))
               (supertype (lookup supertype (scope-type-defs scope))))
+
           (set-super-type typedef *any-type*)
           (set-super-type typedef supertype)))
        (;; t[type:supertype typedef]
         (list (colon-exp :value (qly-symbol :value type)
                          :colon (qly-symbol :value supertype))
               typedef)
+        (format t "~%=== set ~a supertype to ~a~%" type supertype)
         (let ((typedef (make-type-def :mexp mexp :def (process-type typedef scope)))
               (supertype (lookup supertype (scope-type-defs scope))))
           (set-super-type typedef *any-type*)
