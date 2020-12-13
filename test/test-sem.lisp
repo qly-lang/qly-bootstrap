@@ -225,3 +225,9 @@ true
 "#))))
     (analyze-type sem)
     (resolve-var sem)))
+
+(test resolve-toplevel-undefined
+  (let ((sem (make-qly-sem (parse-qly-text #"
+a"#))))
+    (analyze-type sem)
+    (signals undefined-var (resolve-var sem))))

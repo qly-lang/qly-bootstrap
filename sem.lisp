@@ -8,6 +8,7 @@
    :unquote-out-of-quote
    :splice-out-of-quote
    :splice-out-of-array
+   :undefined-var
 
    :qly-sem-qly-ast
    :qly-sem-scopes
@@ -43,6 +44,8 @@
 (define-condition unquote-out-of-quote (semantic-error) ())
 (define-condition splice-out-of-quote (semantic-error) ())
 (define-condition splice-out-of-array (semantic-error) ())
+(define-condition undefined-var (semantic-error)
+  ((var :initarg var :reader var)))
 
 ;;; Chain of environment
 
@@ -169,8 +172,7 @@
                 (pprint-exit-if-list-exhausted)
                 (pprint-newline :mandatory stream)))))))
 
-(defstruct var-def mexp type)
-(defstruct occur mexp)
+(defstruct var-def mexp type occurs)
 (defstruct type-def mexp def parents children)
 
 ;;; Basic type building blocks
@@ -575,11 +577,10 @@
     ((minusp quote) (error "Comma not inside a quote"))
     (t
      (if-let (def (lookup-symbol-def qly-symbol (scope-var-defs (gethash scope scopes))))
-       (progn (setf (gethash qly-symbol symbol-scopes) scope
-                    ;; TODO: also add qly-symbol to def's occurs
-                    )
+       (progn (setf (gethash qly-symbol symbol-scopes) scope)
+              (push qly-symbol (var-def-occurs def))
               (var-def-type def))
-       (error "Cannot resolve var ~a" qly-symbol)))))
+       (error 'undefined-var :var qly-symbol)))))
 
 (defun resolve-var-call-exp (call-exp symbol-scopes scopes scope quote)
   (match (call-exp-value call-exp)
