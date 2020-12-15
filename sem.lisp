@@ -9,6 +9,7 @@
    :splice-out-of-quote
    :splice-out-of-array
    :undefined-var
+   :undefined-type
 
    :qly-sem-qly-ast
    :qly-sem-scopes
@@ -35,7 +36,9 @@
    :make-fun-type
    :fun-type-params
    :fun-type-return
-   :lookup))
+   :lookup
+
+   :expand-type))
 (in-package :qly.sem)
 
 ;;; Semantic errors
@@ -46,6 +49,11 @@
 (define-condition splice-out-of-array (semantic-error) ())
 (define-condition undefined-var (semantic-error)
   ((var :initarg var :reader var)))
+(define-condition type-incompatible (semantic-error)
+  ((expression :initarg expression :reader expression)
+   (expected-type :initarg expected-type :reader expected-type)))
+(define-condition undefined-type (semantic-error)
+  ((type-name :initarg type-name :reader type-name)))
 
 ;;; Chain of environment
 
@@ -172,8 +180,9 @@
                 (pprint-exit-if-list-exhausted)
                 (pprint-newline :mandatory stream)))))))
 
-(defstruct var-def mexp type occurs)
-(defstruct type-def mexp def parents children)
+(defstruct var-def mexp type occurs type-expanded)
+(defstruct type-def
+  mexp def expanded parents children)
 
 ;;; Basic type building blocks
 
@@ -431,6 +440,7 @@
         (let ((typedef (make-type-def :mexp mexp
                                       :def (process-type typedef scope))))
           (set-super-type typedef *any-type*)
+          (setf (type-def-expanded typedef) (expand-type (type-def-def typedef) scope))
           (setf (lookup type (scope-type-defs scope))
                 typedef)))
        (;; t[type:supertype]
@@ -451,6 +461,7 @@
               (supertype (lookup supertype (scope-type-defs scope))))
           (set-super-type typedef *any-type*)
           (set-super-type typedef supertype)
+          (setf (type-def-expanded typedef) (expand-type (type-def-def typedef) scope))
           (setf (lookup type (scope-type-defs scope)) typedef)))))))
 
 ;; In third pass, go inside fun body, recursively process three passes
@@ -509,7 +520,7 @@
     ((qly-symbol :value symbol)
      (if (lookup-type symbol scope)
          symbol
-         (error "Cannot find type ~a" symbol)))
+         (error 'undefined-type :type-name symbol)))
     ((qly-array :value value)
      (cond
        ((every 'colon-exp-p value) (make-struct-type :fields (process-field-types value scope)))
@@ -620,7 +631,7 @@
       (when (fun-type-p expected)
         )))
 
-(defun type-ok (actual expected)
+(defun type-compatible (actual expected)
   (or (equalp actual expected)
       (let ((actual-expanded (expand-type actual))
             (expected-expanded (expand-type expected)))
@@ -628,7 +639,23 @@
             (eql expected-expanded :|any|)
             ()))))
 
-(defun expand-type (type))
+(defun expand-type (type scope)
+  (match type
+    ((fun-type :params params :return return)
+     (make-fun-type :params (mapcar (lambda (type) (expand-type type scope))
+                                    params)
+                    :return (expand-type return scope)))
+    ((array-type :elem-type elem-type)
+     (make-array-type :elem-type (expand-type elem-type scope)))
+    ((struct-type :fields fields)
+     (make-struct-type :fields (mapcar (lambda (field)
+                                         (make-struct-field :name (struct-field-name field)
+                                                            :type (expand-type elem-type scope)))
+                                       fields)))
+    (_
+     (let ((expanded (type-def-expanded (lookup type (scope-type-defs scope)))))
+       (or expanded
+           type)))))
 
 (defun builtin-op-p (def)
   (op-type-p (var-def-type def)))
@@ -641,8 +668,16 @@
            do (resolve-var-mexp mexp scopes symbol-scopes (gethash fname scopes) quote)))
     ((call-exp :value (qly-symbol :value :|v|)
                :args (qly-array :value
-                                (list _ value)))
-     (resolve-var-mexp value scopes symbol-scopes scope quote))
+                                (list (colon-exp :value (qly-symbol :value var-name))
+                                      value)))
+     (let* ((var-def (var-def (lookup var-name scope)))
+            (var-def-expanded-type (expand-type (var-def-type var-def) scope)))
+       (setf (var-def-expanded-type var-def) var-def-expanded-type)
+       (if (type-compatible
+            (resolve-var-mexp value scopes symbol-scopes scope quote)
+            var-type)
+           :|symbol|
+           (error 'type-incompatible :expression value :expected-type var-type))))
     ;; TODO: more builtin special ops and fs
 
     ))

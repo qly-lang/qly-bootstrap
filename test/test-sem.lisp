@@ -118,7 +118,9 @@ f[high [x:f[[]:nil] y:f[[]:uint]]:f[[uint]:uint]]
 t[a int]
 t[b a]
 "#))))
+    (print 33333)
     (analyze-type sem)
+    (print 44444)
     (type-def-env-is `((:|a| . :|int|)
                        (:|b| . :|a|))
                      (scope-type-defs (gethash :root (qly-sem-scopes sem))))))
@@ -216,6 +218,16 @@ f[foo [var1]
                         (:|var1| . :untyped))
                       (scope-var-defs foo-scope)))))
 
+(test inexist-type-def
+  (let ((sem (make-qly-sem (parse-qly-text #"
+t[type1 what]"#))))
+    (signals undefined-type (analyze-type sem))))
+
+(test inexist-type-in-var
+  (let ((sem (make-qly-sem (parse-qly-text #"
+v[x:what]"#))))
+    (signals undefined-type (analyze-type sem))))
+
 (def-suite resolve-vars)
 (in-suite resolve-vars)
 
@@ -231,3 +243,9 @@ true
 a"#))))
     (analyze-type sem)
     (signals undefined-var (resolve-var sem))))
+
+(test resolve-var-def
+  (let ((sem (make-qly-sem (parse-qly-text #"
+v[x:bool true]"#))))
+    (analyze-type sem)
+    (resolve-var sem)))
