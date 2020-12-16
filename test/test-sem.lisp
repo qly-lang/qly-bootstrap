@@ -148,9 +148,9 @@ t[e struct[e:int]]
               (parse-qly-text
                #"
 t[tree]
+t[data int]
 t[node struct[node:data left:tree right:tree]]
 t[leaf:tree data]
-t[data int]
 t[node:tree]
 
 t[type1]

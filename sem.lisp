@@ -350,13 +350,11 @@
     qly-sem))
 
 (defun analyze-type-mexp* (mexp* scope scopes)
-  (loop for mexp in mexp* do (analyze-type-mexp-out1 mexp scope))
-  (loop for mexp in mexp* do (analyze-type-mexp-out2 mexp scope))
+  (loop for mexp in mexp* do (analyze-type-mexp-out mexp scope))
   (loop for mexp in mexp* do (analyze-type-mexp-in mexp scope scopes)))
 
-;; In first pass, insert all type with empty definition in type-table
-;; insert all var and fun with its type
-(defun analyze-type-mexp-out1 (mexp scope)
+;; In first pass, don't go into function definition but only process current level of v, t and f
+(defun analyze-type-mexp-out (mexp scope)
   (match mexp
     (;; v[var : type value]
      ;; type must be defined before, value must compatible with type (check in later pass)
@@ -365,10 +363,12 @@
                           (list* (colon-exp :value (qly-symbol :value var)
                                             :colon type)
                                  _)))
-     (setf (lookup var (scope-var-defs scope))
-           (make-var-def
-            :mexp mexp
-            :type (process-type type scope))))
+     (let ((type (process-type type scope)))
+       (setf (lookup var (scope-var-defs scope))
+             (make-var-def
+              :mexp mexp
+              :type type
+              :type-expanded (expand-type type scope)))))
     (;; f[fname signature mexp*]
      ;; types in signature must be defined before
      (call-exp :value (qly-symbol :value :|f|)
@@ -379,18 +379,22 @@
        (;; [param1:type1 param2 param3:type3 ...]:return-type
         (colon-exp :value (qly-array :value params)
                    :colon return-type)
-        (setf (lookup fname (scope-var-defs scope))
-              (make-var-def
-               :mexp mexp
-               :type (make-fun-type :params (process-param-types params scope)
-                                    :return (process-type return-type scope)))))
+        (let ((type (make-fun-type :params (process-param-types params scope)
+                                   :return (process-type return-type scope))))
+          (setf (lookup fname (scope-var-defs scope))
+                (make-var-def
+                 :mexp mexp
+                 :type type
+                 :type-expanded (expand-type type scope)))))
        (;; [param1:type1 param2 param3:type3 ...]
         (qly-array :value params)
-        (setf (lookup fname (scope-var-defs scope))
-              (make-var-def
-               :mexp mexp
-               :type (make-fun-type :params (process-param-types params scope)
-                                    :return :untyped))))))
+        (let ((type (make-fun-type :params (process-param-types params scope)
+                                   :return :untyped)))
+          (setf (lookup fname (scope-var-defs scope))
+                (make-var-def
+                 :mexp mexp
+                 :type type
+                 :type-expanded (expand-type type scope)))))))
     (;; t[type]
      ;; t[type:supertype]
      ;; t[type typedef]
@@ -402,69 +406,48 @@
         (list* (qly-symbol :value type) maybe-typedef)
         (unless (or (null maybe-typedef) (list1p maybe-typedef))
           (error "expect t[type] or t[type typedef]"))
-        (if (lookup/direct type (scope-type-defs scope))
-            (error "type ~a is already defined in this scope" type)
-            (setf (lookup type (scope-type-defs scope)) :unprocessed)))
+        (unless (lookup/direct type (scope-type-defs scope))
+          (error "type ~a is already defined in this scope" type))
+        (match maybe-typedef
+          (nil
+           (let ((typedef (make-type-def :mexp mexp)))
+             (set-super-type typedef *any-type*)
+             (setf (lookup type (scope-type-defs scope))
+                   typedef)))
+          ((list typedef)
+           (let ((typedef (make-type-def :mexp mexp
+                                         :def (process-type typedef scope))))
+             (set-super-type typedef *any-type*)
+             (setf (type-def-expanded typedef) (expand-type (type-def-def typedef) scope))
+             (setf (lookup type (scope-type-defs scope))
+                   typedef)))))
        (;; t[type:supertype]
         (list (colon-exp :value (qly-symbol :value type)
                          :colon (qly-symbol :value supertype)))
         (unless (lookup type (scope-type-defs scope))
-          (setf (lookup type (scope-type-defs scope)) :unprocessed)))
-       (;; t[type:supertype typedef]
-        (list (colon-exp :value (qly-symbol :value type)
-                         :colon (qly-symbol :value supertype))
-              type-def)
-        (if (lookup/direct type (scope-type-defs scope))
-            (error "type ~a is already defined in this scope" type)
-            (setf (lookup type (scope-type-defs scope)) :unprocessed)))
-       (_ (error "Expect t[type], t[type:supertype], t[type typedef] or t[type:supertype typedef]")))))
-  ;; TODO: should catch malformed f[] and v[] (maybe in a later pass)
-  )
-
-;; In second pass, insert all type with all type definition, for recursive typedef
-(defun analyze-type-mexp-out2 (mexp scope)
-  (match mexp
-    (;; t[...]
-     ;; TODO: catch loop
-     (call-exp :value (qly-symbol :value :|t|) :args
-               (qly-array :value args))
-     (match args
-       (;; t[type]
-        (list (qly-symbol :value type))
-        (let ((typedef (make-type-def :mexp mexp)))
-          (set-super-type typedef *any-type*)
           (setf (lookup type (scope-type-defs scope))
-                typedef)))
-       (;; t[type typedef]
-        (list (qly-symbol :value type) typedef)
-        (let ((typedef (make-type-def :mexp mexp
-                                      :def (process-type typedef scope))))
-          (set-super-type typedef *any-type*)
-          (setf (type-def-expanded typedef) (expand-type (type-def-def typedef) scope))
-          (setf (lookup type (scope-type-defs scope))
-                typedef)))
-       (;; t[type:supertype]
-        (list (colon-exp :value (qly-symbol :value type)
-                         :colon (qly-symbol :value supertype)))
-        (format t "~%=== set ~a supertype to ~a~%" type supertype)
+                (make-type-def :mexp mexp)))
         (let ((typedef (lookup type (scope-type-defs scope)))
               (supertype (lookup supertype (scope-type-defs scope))))
-
           (set-super-type typedef *any-type*)
           (set-super-type typedef supertype)))
        (;; t[type:supertype typedef]
         (list (colon-exp :value (qly-symbol :value type)
                          :colon (qly-symbol :value supertype))
               typedef)
-        (format t "~%=== set ~a supertype to ~a~%" type supertype)
+        (unless (lookup/direct type (scope-type-defs scope))
+          (error "type ~a is already defined in this scope" type))
         (let ((typedef (make-type-def :mexp mexp :def (process-type typedef scope)))
               (supertype (lookup supertype (scope-type-defs scope))))
           (set-super-type typedef *any-type*)
           (set-super-type typedef supertype)
           (setf (type-def-expanded typedef) (expand-type (type-def-def typedef) scope))
-          (setf (lookup type (scope-type-defs scope)) typedef)))))))
+          (setf (lookup type (scope-type-defs scope)) typedef)))
+       (_ (error "Expect t[type], t[type:supertype], t[type typedef] or t[type:supertype typedef]")))))
+  ;; TODO: should catch malformed f[] and v[] (maybe in a later pass)
+  )
 
-;; In third pass, go inside fun body, recursively process three passes
+;; In second pass, go inside fun body, recursively process three passes
 ;; TODO: we did not go into other mexp that might have f[], such as block[... f[]]
 ;; We also didn't check any block[...] which should be seen as f[noname [] ...] noname[]
 ;; We also didn't handle lambda: f[[args]:ret body]
@@ -590,7 +573,7 @@
      (if-let (def (lookup-symbol-def qly-symbol (scope-var-defs (gethash scope scopes))))
        (progn (setf (gethash qly-symbol symbol-scopes) scope)
               (push qly-symbol (var-def-occurs def))
-              (var-def-type def))
+              def)
        (error 'undefined-var :var qly-symbol)))))
 
 (defun resolve-var-call-exp (call-exp symbol-scopes scopes scope quote)
@@ -598,38 +581,28 @@
     ((call-exp)
      (error "Unimplemented consequtive call exp"))
     ((qly-symbol)
-     (let ((type (resolve-var-qly-symbol (call-exp-value call-exp) symbol-scopes scopes scope quote)))
+     (let ((def (resolve-var-qly-symbol (call-exp-value call-exp) symbol-scopes scopes scope quote)))
        (cond
-         ((builtin-op-p type)
+         ((builtin-op-p (var-def-type-expanded def))
           ;; An operation
           (resolve-var-builtin-op call-exp symbol-scopes scopes scope quote))
-         ((array-type-p type)
+         ((array-type-p (var-def-type-expanded def))
           ;; array access
           (assert (list1p (qly-array-value (call-exp-args call-exp))))
           (let ((mexp-type (resolve-var-mexp (car (qly-array-value (call-exp-args call-exp))) symbol-scopes scopes scope quote)))
-            (assert (type-ok mexp-type (lookup-type :|uint| :root)))
-            (array-type-elem-type type)))
+            (assert (type-compatible mexp-type (lookup-type :|uint| :root)))
+            (array-type-elem-type (var-def-type-expanded def))))
          (t
           ;; A function call
-          (assert (fun-type-p type))
+          (assert (fun-type-p (var-def-type-expanded def)))
           (fun-arg-type-ok (loop for mexp in (qly-array-value (call-exp-args call-exp))
                                  collect (resolve-var-mexp mexp symbol-scopes scopes scope quote))
-                           type)
-          (fun-type-return type)))))
+                           (var-def-type-expanded def))
+          (fun-type-return (var-def-type-expanded def))))))
     ((dot-exp)
      (error "Unimplemented dot exp call"))))
 
 (defun fun-arg-type-ok (actual expected))
-
-(defun type-ok-expanded (actual expected)
-  (or (equalp actual expected)
-      (eql expected :|any|)
-      (when (array-type-p expected)
-        (type-ok-expanded (array-type-elem-type actual) (array-type-elem-type expected)))
-      (when (struct-type-p expected)
-        )
-      (when (fun-type-p expected)
-        )))
 
 (defun type-compatible (actual expected)
   (or (equalp actual expected)
@@ -650,7 +623,7 @@
     ((struct-type :fields fields)
      (make-struct-type :fields (mapcar (lambda (field)
                                          (make-struct-field :name (struct-field-name field)
-                                                            :type (expand-type elem-type scope)))
+                                                            :type (expand-type (struct-field-type field) scope)))
                                        fields)))
     (_
      (let ((expanded (type-def-expanded (lookup type (scope-type-defs scope)))))
@@ -670,14 +643,13 @@
                :args (qly-array :value
                                 (list (colon-exp :value (qly-symbol :value var-name))
                                       value)))
-     (let* ((var-def (var-def (lookup var-name scope)))
-            (var-def-expanded-type (expand-type (var-def-type var-def) scope)))
-       (setf (var-def-expanded-type var-def) var-def-expanded-type)
+     (let* ((var-def (lookup var-name scope))
+            (var-def-expanded-type (var-def-type-expanded var-def)))
        (if (type-compatible
             (resolve-var-mexp value scopes symbol-scopes scope quote)
-            var-type)
+            var-def-expanded-type)
            :|symbol|
-           (error 'type-incompatible :expression value :expected-type var-type))))
+           (error 'type-incompatible :expression value :expected-type (var-def-type var-def)))))
     ;; TODO: more builtin special ops and fs
 
     ))
