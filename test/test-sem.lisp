@@ -118,9 +118,7 @@ f[high [x:f[[]:nil] y:f[[]:uint]]:f[[uint]:uint]]
 t[a int]
 t[b a]
 "#))))
-    (print 33333)
     (analyze-type sem)
-    (print 44444)
     (type-def-env-is `((:|a| . :|int|)
                        (:|b| . :|a|))
                      (scope-type-defs (gethash :root (qly-sem-scopes sem))))))

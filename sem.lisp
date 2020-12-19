@@ -201,12 +201,14 @@
 (defun debug-print-fun-type (fun-type stream)
   (format stream "f[[~{~a~^ ~}]:~a]" (fun-type-params fun-type) (fun-type-return fun-type)))
 
+(defparameter *bool-type* (make-type-def))
+
 (defparameter *builtin-var-defs*
   (let ((var-defs (make-env-chain)))
     (setf
      ;;; std primitives
-     (lookup :|true| var-defs) (make-var-def)
-     (lookup :|false| var-defs) (make-var-def)
+     (lookup :|true| var-defs) (make-var-def :type :|bool|)
+     (lookup :|false| var-defs) (make-var-def :type :|bool|)
 
      (lookup :|v| var-defs) (make-var-def :type (make-op-type :return :|symbol|))
      (lookup :|f| var-defs) (make-var-def :type (make-op-type :return :|symbol|))
@@ -406,7 +408,7 @@
         (list* (qly-symbol :value type) maybe-typedef)
         (unless (or (null maybe-typedef) (list1p maybe-typedef))
           (error "expect t[type] or t[type typedef]"))
-        (unless (lookup/direct type (scope-type-defs scope))
+        (when (lookup/direct type (scope-type-defs scope))
           (error "type ~a is already defined in this scope" type))
         (match maybe-typedef
           (nil
@@ -435,7 +437,7 @@
         (list (colon-exp :value (qly-symbol :value type)
                          :colon (qly-symbol :value supertype))
               typedef)
-        (unless (lookup/direct type (scope-type-defs scope))
+        (when (lookup/direct type (scope-type-defs scope))
           (error "type ~a is already defined in this scope" type))
         (let ((typedef (make-type-def :mexp mexp :def (process-type typedef scope)))
               (supertype (lookup supertype (scope-type-defs scope))))
@@ -541,7 +543,7 @@
         do (resolve-var-mexp mexp
                              (qly-sem-symbol-scopes qly-sem)
                              (qly-sem-scopes qly-sem)
-                             :root
+                             (gethash :root (qly-sem-scopes qly-sem))
                              0)))
 
 (defun resolve-var-mexp (mexp symbol-scopes scopes scope quote)
@@ -570,35 +572,38 @@
     ((plusp quote))
     ((minusp quote) (error "Comma not inside a quote"))
     (t
-     (if-let (def (lookup-symbol-def qly-symbol (scope-var-defs (gethash scope scopes))))
+     (if-let (def (lookup-symbol-def qly-symbol (scope-var-defs scope)))
        (progn (setf (gethash qly-symbol symbol-scopes) scope)
               (push qly-symbol (var-def-occurs def))
-              def)
+              (var-def-type-auto def))
        (error 'undefined-var :var qly-symbol)))))
+
+(defun var-def-type-auto (def)
+  (or (var-def-type-expanded def) (var-def-type def)))
 
 (defun resolve-var-call-exp (call-exp symbol-scopes scopes scope quote)
   (match (call-exp-value call-exp)
     ((call-exp)
      (error "Unimplemented consequtive call exp"))
     ((qly-symbol)
-     (let ((def (resolve-var-qly-symbol (call-exp-value call-exp) symbol-scopes scopes scope quote)))
+     (let ((type (resolve-var-qly-symbol (call-exp-value call-exp) symbol-scopes scopes scope quote)))
        (cond
-         ((builtin-op-p (var-def-type-expanded def))
+         ((builtin-op-p type)
           ;; An operation
           (resolve-var-builtin-op call-exp symbol-scopes scopes scope quote))
-         ((array-type-p (var-def-type-expanded def))
+         ((array-type-p type)
           ;; array access
           (assert (list1p (qly-array-value (call-exp-args call-exp))))
           (let ((mexp-type (resolve-var-mexp (car (qly-array-value (call-exp-args call-exp))) symbol-scopes scopes scope quote)))
             (assert (type-compatible mexp-type (lookup-type :|uint| :root)))
-            (array-type-elem-type (var-def-type-expanded def))))
+            (array-type-elem-type type)))
          (t
           ;; A function call
-          (assert (fun-type-p (var-def-type-expanded def)))
+          (assert (fun-type-p type))
           (fun-arg-type-ok (loop for mexp in (qly-array-value (call-exp-args call-exp))
                                  collect (resolve-var-mexp mexp symbol-scopes scopes scope quote))
-                           (var-def-type-expanded def))
-          (fun-type-return (var-def-type-expanded def))))))
+                           type)
+          (fun-type-return type)))))
     ((dot-exp)
      (error "Unimplemented dot exp call"))))
 
@@ -606,14 +611,11 @@
 
 (defun type-compatible (actual expected)
   (or (equalp actual expected)
-      (let ((actual-expanded (expand-type actual))
-            (expected-expanded (expand-type expected)))
-        (or (equalp actual-expanded expected-expanded)
-            (eql expected-expanded :|any|)
-            ()))))
+      (eql expected :|any|)))
 
 (defun expand-type (type scope)
   (match type
+    (:untyped :untyped)
     ((fun-type :params params :return return)
      (make-fun-type :params (mapcar (lambda (type) (expand-type type scope))
                                     params)
@@ -630,8 +632,8 @@
        (or expanded
            type)))))
 
-(defun builtin-op-p (def)
-  (op-type-p (var-def-type def)))
+(defun builtin-op-p (type)
+  (op-type-p type))
 
 (defun resolve-var-builtin-op (call-exp scopes symbol-scopes scope quote)
   (match call-exp
@@ -643,8 +645,8 @@
                :args (qly-array :value
                                 (list (colon-exp :value (qly-symbol :value var-name))
                                       value)))
-     (let* ((var-def (lookup var-name scope))
-            (var-def-expanded-type (var-def-type-expanded var-def)))
+     (let* ((var-def (lookup var-name (scope-var-defs scope)))
+            (var-def-expanded-type (var-def-type-auto var-def)))
        (if (type-compatible
             (resolve-var-mexp value scopes symbol-scopes scope quote)
             var-def-expanded-type)
