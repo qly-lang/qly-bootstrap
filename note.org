@@ -327,3 +327,10 @@ Add a new pass: easy, add a gf, and impl methods
 
 It's easier than the second approach interface, you don't need worry about interface, differ between interface type and concrete type, express Pass = Pass1 + ...
 Exp means Pass, to mean a different thing (sum of interface) you just create another parent type and add children. Besides its simplicity, it's also more powerful as you can do multi dispatch! (although in this example you don't need multi-dispatch)
+
+How do you represent Enum?
+use exact type: a type that only can have exact value
+t[z]
+t[x:z exact["a"]]
+t[y:z exact[3]]
+# z: enum["a" 3]

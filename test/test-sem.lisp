@@ -244,6 +244,17 @@ a"#))))
 
 (test resolve-var-def
   (let ((sem (make-qly-sem (parse-qly-text #"
-v[x:bool true]"#))))
+#v[x:bool true]
+v[y:int 2]
+#v[z:uint 0x1]
+#v[a:string "aaa"]"#))))
+    (analyze-type sem)
+    (resolve-var sem)
+    ))
+
+(test resolve-int-cast
+  (let ((sem (make-qly-sem (parse-qly-text #"
+v[x:int32 2]
+"#))))
     (analyze-type sem)
     (resolve-var sem)))

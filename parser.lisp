@@ -177,10 +177,10 @@
   (:lambda (list)
     (parse-integer (text list) :radix 10))
   (:lambda (integer)
-    (cond ((<= (- (expt 2 31)) integer (1- (expt 2 31))) `(:int32 ,integer))
-          ((<= (- (expt 2 63)) integer (1- (expt 2 63))) `(:int64 ,integer))
-          ((<= (- (expt 2 127)) integer (1- (expt 2 127))) `(:int128 ,integer))
-          (t `(:bigint ,integer))))
+    (cond ((<= (- (expt 2 31)) integer (1- (expt 2 31))) `(:|int32| ,integer))
+          ((<= (- (expt 2 63)) integer (1- (expt 2 63))) `(:|int64| ,integer))
+          ((<= (- (expt 2 127)) integer (1- (expt 2 127))) `(:|int128| ,integer))
+          (t `(:|bigint| ,integer))))
   (:lambda (typed-integer &bounds start end)
     (make-qly-int :start start
                   :end end
@@ -200,7 +200,7 @@
     (make-qly-real :start start
                    :end end
                    :value (parse-float (text list))
-                   :type :f64)))
+                   :type :|f64|)))
 
 (defrule qly-uint (and (or (and "0x" (+ hex-char))
                            (and "0o" (+ oct-char))
@@ -213,10 +213,10 @@
                    (#\b 2))))
       (list (parse-integer (text (cdar list)) :radix radix) radix)))
   (:destructure (integer radix)
-    (cond ((< integer (expt 2 32)) `(:uint32 ,integer ,radix))
-          ((< integer (expt 2 64)) `(:uint64 ,integer ,radix))
-          ((< integer (expt 2 128)) `(:uint128 ,integer ,radix))
-          (t `(:biguint ,integer ,radix))))
+    (cond ((< integer (expt 2 32)) `(:|uint32| ,integer ,radix))
+          ((< integer (expt 2 64)) `(:|uint64| ,integer ,radix))
+          ((< integer (expt 2 128)) `(:|uint128| ,integer ,radix))
+          (t `(:|biguint| ,integer ,radix))))
   (:destructure (type value base &bounds start end)
     (make-qly-uint :start start
                    :end end

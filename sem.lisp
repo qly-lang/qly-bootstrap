@@ -184,6 +184,11 @@
 (defstruct type-def
   mexp def expanded parents children)
 
+(defmethod print-object ((obj type-def) stream)
+  (format stream "def: ~a~%children: ~a~%parents: ~a~%" (type-def-def obj)
+          (type-def-children obj)
+          (type-def-parents obj)))
+
 ;;; Basic type building blocks
 
 (defstruct fun-type params return)
@@ -192,6 +197,7 @@
 (defstruct struct-type fields)
 (defstruct struct-field name type)
 (defstruct op-type params return)
+(defstruct exact-type value)
 
 (defmethod print-object :around ((obj fun-type) stream)
   (if *print-readably*
@@ -504,7 +510,7 @@
   (match type
     ((qly-symbol :value symbol)
      (if (lookup-type symbol scope)
-         symbol
+         (progn (print symbol) symbol)
          (error 'undefined-type :type-name symbol)))
     ((qly-array :value value)
      (cond
@@ -565,7 +571,15 @@
      (loop for mexp in mexp*
            do (resolve-var-mexp mexp symbol-scopes scopes scope quote)))
     ((call-exp)
-     (resolve-var-call-exp mexp symbol-scopes scopes scope quote))))
+     (resolve-var-call-exp mexp symbol-scopes scopes scope quote))
+    ((qly-int :type int-type)
+     int-type)
+    ((qly-uint :type uint-type)
+     uint-type)
+    ((qly-string)
+     :|string|)
+    ((qly-real :type real-type)
+     real-type)))
 
 (defun resolve-var-qly-symbol (qly-symbol symbol-scopes scopes scope quote)
   (cond
@@ -609,9 +623,24 @@
 
 (defun fun-arg-type-ok (actual expected))
 
-(defun type-compatible (actual expected)
+(defun type-compatible (actual expected scope)
   (or (equalp actual expected)
-      (eql expected :|any|)))
+      (is-subtype actual expected scope)))
+
+(defun is-subtype (actual expected scope)
+  (format t "type debug: actual ~s expected: ~s" actual expected)
+  (and
+   (print "bbbbbbbbbbbbbbbbbbbbb")
+   (symbolp actual)
+   (symbolp expected)
+   (print "aaaaaaaaaaaaaaaaaaaaa")
+   (let ((actual-type (lookup-type actual scope))
+         (expected-type (lookup-type expected scope)))
+     (format t "type debug: expected def ~a" expected-type)
+     (or (member actual-type (type-def-children expected-type))
+         (some (lambda (expected)
+                 (is-subtype actual expected scope))
+               (type-def-children expected-type))))))
 
 (defun expand-type (type scope)
   (match type
@@ -646,12 +675,25 @@
                                 (list (colon-exp :value (qly-symbol :value var-name))
                                       value)))
      (let* ((var-def (lookup var-name (scope-var-defs scope)))
-            (var-def-expanded-type (var-def-type-auto var-def)))
-       (if (type-compatible
-            (resolve-var-mexp value scopes symbol-scopes scope quote)
-            var-def-expanded-type)
-           :|symbol|
-           (error 'type-incompatible :expression value :expected-type (var-def-type var-def)))))
-    ;; TODO: more builtin special ops and fs
+            (var-type (var-def-type-auto var-def))
+            (value-type (resolve-var-mexp value scopes symbol-scopes scope quote)))
+       (cond
+         ((type-compatible
+           value-type
+           var-type
+           scope)
+          :|symbol|)
+         ((type-convertible
+           value-type
+           var-type
+           scope)
+          :|symbol|)
+         (t
+          (error 'type-incompatible :expression value :expected-type (var-def-type var-def))))))))
+;; TODO: more builtin special ops and fs
 
-    ))
+(defun type-convertible (source-type target-type scope)
+  (find-applicable-method :|as| (list source-type (make-exact-type :value target-type)) scope))
+
+(defun find-applicable-method (method-name method-param-types scope)
+  )
