@@ -334,3 +334,7 @@ t[z]
 t[x:z exact["a"]]
 t[y:z exact[3]]
 # z: enum["a" 3]
+
+Data structure in sem analysis:
+qly-sem
+scopes
