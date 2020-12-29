@@ -20,6 +20,7 @@
    :make-qly-sem
    :var-def-type
    :var-def-mexp
+   :type-def-name
    :type-def-def
    :type-def-mexp
    :type-def-children
@@ -36,7 +37,16 @@
    :make-fun-type
    :fun-type-params
    :fun-type-return
+   :type-def
+   :op-type
+   :op-type-params
+   :op-type-return
+   :exact-type
+   :exact-type-value
    :lookup
+   :range-type
+   :range-type-start
+   :range-type-end
 
    :expand-type))
 (in-package :qly.sem)
@@ -428,7 +438,7 @@
 (defun process-type (type scope)
   (match type
     ((qly-symbol :value symbol)
-     (or (lookup-type symbol scope)
+     (or (lookup-type type scope)
          (error 'undefined-type :type-name symbol)))
     ((qly-array :value value)
      (cond
@@ -574,10 +584,11 @@ For type that is toplevel (most builtin and custom generic type), type def itsel
                                          (make-struct-field :name (struct-field-name field)
                                                             :type (expand-type (struct-field-type field) scope)))
                                        fields)))
+    ((type-def)
+     (or (type-def-expanded type)
+         type))
     (_
-     (let ((expanded (type-def-expanded (lookup type (scope-type-defs scope)))))
-       (or expanded
-           type)))))
+     (error "unknown type to expand"))))
 
 (defun builtin-op-p (type)
   (op-type-p type))

@@ -1,22 +1,46 @@
 (in-package :cl-user)
 (defpackage :qly.test-sem
   (:use :cl :fiveam :qly.sem)
-  (:import-from :qly.parser :parse-qly-text :qly-symbol-value))
+  (:import-from :qly.parser :parse-qly-text :qly-symbol-value :to-sexp))
 (in-package :qly.test-sem)
 
 (def-suite analyze-type-definition)
 (in-suite analyze-type-definition)
 
+(defmethod to-sexp ((type type-def))
+  (type-def-name type))
+
+(defmethod to-sexp ((type fun-type))
+  (list :fun (mapcar 'to-sexp (fun-type-params type)) (to-sexp (fun-type-return type))))
+
+(defmethod to-sexp ((type range-type))
+  (list :range (range-type-start type) (range-type-end type)))
+
+(defmethod to-sexp ((type array-type))
+  (list :array (to-sexp (array-type-elem-type type))))
+
+(defmethod to-sexp ((type struct-type))
+  (cons :struct (mapcar (lambda (field)
+                          (list (struct-field-name)
+                                (to-sexp (struct-field-type field))))
+                        (struct-type-fields type))))
+
+(defmethod op-type ((type op-type))
+  (list :op (mapcar 'to-sexp (op-type-params type)) (to-sexp (op-type-return type))))
+
+(defmethod op-type ((type exact-type))
+  (list :exact (exact-type-value type)))
+
 (defun var-def-env-is (expect env)
   (loop for (var . type) in expect
         do (is (equalp type
-                       (var-def-type (gethash var (qly.sem::env-chain-%env env))))))
+                       (to-sexp (var-def-type (gethash var (qly.sem::env-chain-%env env)))))))
   (is (= (length expect) (hash-table-count (qly.sem::env-chain-%env env)))))
 
 (defun type-def-env-is (expect env)
   (loop for (type . def) in expect
         do (is (equalp def
-                       (type-def-def (gethash type (qly.sem::env-chain-%env env))))))
+                       (to-sexp (type-def-def (gethash type (qly.sem::env-chain-%env env)))))))
   (is (= (length expect) (hash-table-count (qly.sem::env-chain-%env env)))))
 
 (defun type-def-env-subtype-has (expect env)
@@ -39,7 +63,7 @@ v[bbb:symbol 'x]"#))))
     (analyze-type sem)
     (var-def-env-is `((:|x| . :|int|)
                       (:|y| . :|string|)
-                      (:|aaa| . ,(make-array-type :elem-type :|uint32|))
+                      (:|aaa| . (:array :|uint32|))
                       (:|bbb| . :|symbol|))
                     (scope-var-defs (gethash :root (qly-sem-scopes sem))))))
 
@@ -53,11 +77,11 @@ v[a:[array[string]]]
 v[b:array[[string]]]
 "#))))
     (analyze-type sem)
-    (var-def-env-is `((:|x| . ,(make-array-type :elem-type (make-array-type :elem-type :|string|)))
-                      (:|y| . ,(make-array-type :elem-type :|string|))
-                      (:|z| . ,(make-array-type :elem-type (make-array-type :elem-type :|string|)))
-                      (:|a| . ,(make-array-type :elem-type (make-array-type :elem-type :|string|)))
-                      (:|b| . ,(make-array-type :elem-type (make-array-type :elem-type :|string|))))
+    (var-def-env-is `((:|x| . (:array (:array :|string|)))
+                      (:|y| . (:array :|string|))
+                      (:|z| . (:array (:array :|string|)))
+                      (:|a| . (:array (:array :|string|)))
+                      (:|b| . (:array (:array :|string|))))
                     (scope-var-defs (gethash :root (qly-sem-scopes sem))))))
 
 (test define-structs
