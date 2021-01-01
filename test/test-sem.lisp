@@ -21,9 +21,12 @@
 
 (defmethod to-sexp ((type struct-type))
   (cons :struct (mapcar (lambda (field)
-                          (list (struct-field-name)
+                          (list (struct-field-name field)
                                 (to-sexp (struct-field-type field))))
                         (struct-type-fields type))))
+
+(defmethod to-sexp ((type (eql :untyped)))
+  :untyped)
 
 (defmethod op-type ((type op-type))
   (list :op (mapcar 'to-sexp (op-type-params type)) (to-sexp (op-type-return type))))
@@ -85,55 +88,42 @@ v[b:array[[string]]]
                     (scope-var-defs (gethash :root (qly-sem-scopes sem))))))
 
 (test define-structs
-      (let ((sem (make-qly-sem
-                  (parse-qly-text
-                   #"v[x:struct[x:string]]
+  (let ((sem (make-qly-sem
+              (parse-qly-text
+               #"v[x:struct[x:string]]
 v[y:[y:string]]
 v[z:[x:string y:[y:string] z:[string] a:[[x:string]]]]
 "#))))
-        (analyze-type sem)
-        (var-def-env-is `((:|x| . ,(make-struct-type :fields (list (make-struct-field :name :|x| :type :|string|))))
-                          (:|y| . ,(make-struct-type :fields (list (make-struct-field :name :|y| :type :|string|))))
-                          (:|z| . ,(make-struct-type
-                                    :fields
-                                    (list
-                                     (make-struct-field :name :|x| :type :|string|)
-                                     (make-struct-field
-                                      :name :|y|
-                                      :type (make-struct-type
-                                             :fields (list
-                                                      (make-struct-field :name :|y| :type :|string|))))
-                                     (make-struct-field
-                                      :name :|z|
-                                      :type (make-array-type :elem-type :|string|))
-                                     (make-struct-field
-                                      :name :|a|
-                                      :type (make-array-type :elem-type
-                                                             (make-struct-type
-                                                              :fields (list (make-struct-field
-                                                                             :name :|x|
-                                                                             :type :|string|)))))))))
-                        (scope-var-defs (gethash :root (qly-sem-scopes sem))))))
+    (analyze-type sem)
+    (var-def-env-is `((:|x| . (:struct (:|x| :|string|)))
+                      (:|y| . (:struct (:|y| :|string|)))
+                      (:|z| . (:struct
+                               (:|x| :|string|)
+                               (:|y| (:struct (:|y| :|string|)))
+                               (:|z| (:array :|string|))
+                               (:|a| (:array (:struct (:|x| :|string|)))))))
+                    (scope-var-defs (gethash :root (qly-sem-scopes sem))))))
 
 
 (test define-functions
-      (let ((sem (make-qly-sem
-                  (parse-qly-text
-                   #"
+  (let ((sem (make-qly-sem
+              (parse-qly-text
+               #"
 f[x []]
 f[foo [x]]
 f[bar [x:int y:string]:uint]
 f[high [x:f[[]:nil] y:f[[]:uint]]:f[[uint]:uint]]
 "#))))
-        (analyze-type sem)
-        (print sem)
-        (var-def-env-is `((:|x| . ,(make-fun-type :return :untyped :params nil))
-                          (:|foo| . ,(make-fun-type :return :untyped :params (list :untyped)))
-                          (:|bar| . ,(make-fun-type :return :|uint| :params (list :|int| :|string|)))
-                          (:|high| . ,(make-fun-type :return (make-fun-type :return :|uint| :params (list :|uint|))
-                                                     :params (list (make-fun-type :return :|nil| :params ())
-                                                                   (make-fun-type :return :|uint| :params ())))))
-                        (scope-var-defs (gethash :root (qly-sem-scopes sem))))))
+    (analyze-type sem)
+    (print sem)
+    (var-def-env-is `((:|x| . (:fun () :untyped))
+                      (:|foo| . (:fun (:untyped) :untyped))
+                      (:|bar| . (:fun (:|int| :|string|) :|uint|))
+                      (:|high| . (:fun
+                                  ((:fun () :|nil|)
+                                   (:fun () :|uint|))
+                                  (:fun (:|uint|) :|uint|))))
+                    (scope-var-defs (gethash :root (qly-sem-scopes sem))))))
 
 (test simple-type-def
   (let ((sem (make-qly-sem
