@@ -1,3 +1,4 @@
+(declaim (optimize (debug 3)))
 (in-package :cl-user)
 (defpackage :qly.sem
   (:use :cl :qly.parser :qly.util)
@@ -65,54 +66,6 @@
 (define-condition undefined-type (semantic-error)
   ((type-name :initarg type-name :reader type-name)))
 
-;;; Chain of environment
-
-(defstruct (env-chain
-            (:constructor make-env-chain (&optional %parent)))
-  (%env (make-hash-table :test #'equalp))
-  %parent)
-
-(defun lookup/direct (name env)
-  (gethash name (env-chain-%env env)))
-
-(defun lookup (name env)
-  (or (lookup/direct name env)
-      (when-let ((parent (env-chain-%parent env)))
-        (lookup name parent))))
-
-(defun (setf lookup) (new-value name env)
-  (setf (gethash name (env-chain-%env env)) new-value))
-
-(defun lookup-var (qly-symbol scope)
-  (or (lookup-var/direct qly-symbol)
-      (when-let (parent (scope-parent scope))
-        (lookup-var qly-symbol parent))))
-
-(defun lookup-var/direct (qly-symbol scope)
-  (if-let (def (lookup/direct (qly-symbol-value qly-symbol) (scope-var-defs scope)))
-    (when (or (null (var-def-mexp def)) ; pos null is builtin
-              (> (mexp-start qly-symbol)
-                 (mexp-end (var-def-mexp def))))
-      def)))
-
-(defun (setf lookup-var) (var-def name scope)
-  (setf (lookup name (scope-var-defs scope)) var-def))
-
-(defun lookup-type/direct (qly-symbol scope)
-  (if-let (def (lookup/direct (qly-symbol-value qly-symbol) (scope-type-defs scope)))
-    (when (or (null (type-def-mexp def)) ; pos null is builtin
-              (> (mexp-start qly-symbol)
-                 (mexp-end (type-def-mexp def))))
-      def)))
-
-(defun lookup-type (qly-symbol scope)
-  (or (lookup-type/direct qly-symbol scope)
-      (when-let (parent (scope-parent scope))
-        (lookup-type qly-symbol parent))))
-
-(defun (setf lookup-type) (type-def name scope)
-  (setf (lookup name (scope-type-defs scope)) type-def))
-
 ;;; Qly semantic unit
 
 (defstruct (qly-sem
@@ -147,7 +100,60 @@
   (pushnew parent (type-def-parents child))
   (pushnew child (type-def-children parent)))
 
+;;; Chain of environment
+
+(defstruct (env-chain
+            (:constructor make-env-chain (&optional %parent)))
+  (%env (make-hash-table :test #'equalp))
+  %parent)
+
+(defun lookup/direct (name env)
+  (gethash name (env-chain-%env env)))
+
+(defun lookup (name env)
+  (or (lookup/direct name env)
+      (when-let ((parent (env-chain-%parent env)))
+        (lookup name parent))))
+
+(defun (setf lookup) (new-value name env)
+  (setf (gethash name (env-chain-%env env)) new-value))
+
+(defun lookup-var (qly-symbol scope)
+  (or (lookup-var/direct qly-symbol scope)
+      (when-let (parent (scope-parent scope))
+        (lookup-var qly-symbol parent))))
+
+(defun lookup-var/direct (qly-symbol scope)
+  (if-let (def (lookup/direct (qly-symbol-value qly-symbol) (scope-var-defs scope)))
+    (when (or (null (var-def-mexp def)) ; pos null is builtin
+              (> (mexp-start qly-symbol)
+                 (mexp-end (var-def-mexp def))))
+      def)))
+
+(defun (setf lookup-var) (var-def name scope)
+  (declare (keyword name) (var-def var-def) (scope scope))
+  (setf (lookup name (scope-var-defs scope)) var-def))
+
+(defun lookup-type/direct (qly-symbol scope)
+  (if-let (def (lookup/direct (qly-symbol-value qly-symbol) (scope-type-defs scope)))
+    (when (or (null (type-def-mexp def)) ; pos null is builtin
+              (> (mexp-start qly-symbol)
+                 (mexp-end (type-def-mexp def))))
+      def)))
+
+(defun lookup-type (qly-symbol scope)
+  (or (lookup-type/direct qly-symbol scope)
+      (when-let (parent (scope-parent scope))
+        (lookup-type qly-symbol parent))))
+
+(defun lookup-type-raw (name scope)
+  (lookup name (scope-type-defs scope)))
+
+(defun (setf lookup-type) (type-def name scope)
+  (setf (lookup name (scope-type-defs scope)) type-def))
+
 (defvar *builtin-scope* (%make-scope))
+(defvar *any-type*)
 
 (defun create-builtin-types (type-defs types)
   (loop for type in types do
@@ -161,7 +167,11 @@
 
 (defun create-builtin-vars (var-defs vars)
   (loop for var in vars do
-    (setf (lookup (make-keyword (string-downcase (string (car var)))) var-defs) (make-var-def :type (cdr var) :scope *builtin-scope*))))
+    (setf (lookup (make-keyword (string-downcase (string (car var)))) var-defs)
+          (make-var-def :name (make-keyword (string-downcase (string (car var))))
+                        :type (cdr var)
+                        :type-expanded (cdr var)
+                        :scope *builtin-scope*))))
 
 (defun create-builtin-scope ()
   (let ((var-defs (make-env-chain))
@@ -171,6 +181,7 @@
      (list :nil :any :symbol :int :uint :int8 :int16 :int32 :int64 :int128 :fixint :bigint :biguint
                 :uint8 :uint16 :uint32 :uint64 :uint128 :fixuint :fixnum :real :float32 :float64
                 :decimal :number :bool :mexp :char))
+    (setf *any-type* (lookup :|any| type-defs))
     (setf
      (lookup :|ascii-char| type-defs) (make-type-def :name :|ascii-char| :def (make-range-type :start 0 :end 127) :scope *builtin-scope*)
      (lookup :|extend-char| type-defs) (make-type-def :name :|char| :def (make-range-type :start 128 :end 1114111) :scope *builtin-scope*)
@@ -187,9 +198,9 @@
      var-defs
      `((:true . ,(lookup :|bool| type-defs))
        (:false . ,(lookup :|bool| type-defs))
-       (:v . ,(make-var-def :type (make-op-type :return :|symbol|)))
-       (:f . ,(make-var-def :type (make-op-type :return :|symbol|)))
-       (:t . ,(make-var-def :type (make-op-type :return :|symbol|)))
+       (:v . ,(make-op-type :return :|symbol|))
+       (:f . ,(make-op-type :return :|symbol|))
+       (:t . ,(make-op-type :return :|symbol|))
        (:block . ,(make-op-type))
        (:if . ,(make-op-type))
        (:while . ,(make-op-type))
@@ -323,49 +334,50 @@
                (qly-array :value args))
      (match args
        (;; t[type] or t[type typedef]
-        (list* (qly-symbol :value type) maybe-typedef)
+        (list* (qly-symbol) maybe-typedef)
         (unless (or (null maybe-typedef) (list1p maybe-typedef))
           (error "expect t[type] or t[type typedef]"))
-        (when (lookup-type/direct type scope)
-          (error "type ~a is already defined in this scope" type))
-        (match maybe-typedef
-          (nil
-           (let ((typedef (make-type-def :name type :mexp mexp :scope scope)))
-             (set-super-type typedef *any-type*)
-             (setf (lookup-type type scope)
-                   typedef)))
-          ((list typedef)
-           (let ((typedef (make-type-def
-                           :name type
-                           :mexp mexp
-                           :def (process-type typedef scope)
-                           :scope scope)))
-             (set-super-type typedef *any-type*)
-             (setf (type-def-expanded typedef) (expand-type (type-def-def typedef) scope))
-             (setf (lookup-type type scope)
-                   typedef)))))
+        (let ((type (first args)))
+          (when (lookup-type/direct type scope)
+            (error "type ~a is already defined in this scope" type))
+          (match maybe-typedef
+            (nil
+             (let ((typedef (make-type-def :name (qly-symbol-value type) :mexp mexp :scope scope)))
+               (set-super-type typedef *any-type*)
+               (setf (lookup-type (qly-symbol-value type) scope)
+                     typedef)))
+            ((list typedef)
+             (let ((typedef (make-type-def
+                             :name (qly-symbol-value type)
+                             :mexp mexp
+                             :def (process-type typedef scope)
+                             :scope scope)))
+               (set-super-type typedef *any-type*)
+               (setf (type-def-expanded typedef) (expand-type (type-def-def typedef) scope))
+               (setf (lookup-type (qly-symbol-value type) scope)
+                     typedef))))))
        (;; t[type:supertype]
-        (list (colon-exp :value (qly-symbol :value type)
-                         :colon (qly-symbol :value supertype)))
-        (unless (lookup type (scope-type-defs scope))
-          (setf (lookup type (scope-type-defs scope))
-                (make-type-def :name type :mexp mexp :scope scope)))
+        (list (colon-exp :value (and type (type qly-symbol))
+                         :colon (and supertype (type qly-symbol))))
+        (unless (lookup-type type scope)
+          (setf (lookup-type (qly-symbol-value type) scope)
+                (make-type-def :name (qly-symbol-value type) :mexp mexp :scope scope)))
         (let ((typedef (lookup-type type scope))
               (supertype (lookup-type supertype scope)))
           (set-super-type typedef *any-type*)
           (set-super-type typedef supertype)))
        (;; t[type:supertype typedef]
-        (list (colon-exp :value (qly-symbol :value type)
-                         :colon (qly-symbol :value supertype))
+        (list (colon-exp :value (and type (type qly-symbol))
+                         :colon (and supertype (type qly-symbol)))
               typedef)
         (when (lookup-type/direct type scope)
           (error "type ~a is already defined in this scope" type))
-        (let ((typedef (make-type-def :name type :mexp mexp :def (process-type typedef scope) :scope scope))
+        (let ((typedef (make-type-def :name (qly-symbol-value type) :mexp mexp :def (process-type typedef scope) :scope scope))
               (supertype (lookup-type supertype scope)))
           (set-super-type typedef *any-type*)
           (set-super-type typedef supertype)
           (setf (type-def-expanded typedef) (expand-type (type-def-def typedef) scope))
-          (setf (lookup-type type scope) typedef)))
+          (setf (lookup-type (qly-symbol-value type) scope) typedef)))
        (_ (error "Expect t[type], t[type:supertype], t[type typedef] or t[type:supertype typedef]")))))
   ;; TODO: should catch malformed f[] and v[] (maybe in a later pass)
   )
@@ -527,7 +539,7 @@
 For type that is toplevel (most builtin and custom generic type), type def itself"
   (when (eql :untyped (var-def-type def))
     (error "unable to resolve untyped var"))
-  (or (var-def-type-expanded def) def))
+  (var-def-type-expanded def))
 
 (defun resolve-var-call-exp (call-exp symbol-scopes scopes scope quote)
   (match (call-exp-value call-exp)
@@ -543,7 +555,7 @@ For type that is toplevel (most builtin and custom generic type), type def itsel
           ;; array access
           (assert (list1p (qly-array-value (call-exp-args call-exp))))
           (let ((mexp-type (resolve-var-mexp (car (qly-array-value (call-exp-args call-exp))) symbol-scopes scopes scope quote)))
-            (assert (type-compatible mexp-type (lookup-type :|uint| :root)))
+            (assert (type-compatible mexp-type (lookup-type-raw :|uint| :root)))
             (array-type-elem-type type)))
          (t
           ;; A function call
@@ -613,16 +625,17 @@ For type that is toplevel (most builtin and custom generic type), type def itsel
               (lookup var-name (scope-var-defs scope)))
             (var-type (var-def-type-auto var-def))
             (value-type (resolve-var-mexp value scopes symbol-scopes scope quote)))
+       (invoke-debugger (error "~a === ~a" var-type value-type))
        (cond
          ((type-compatible
            value-type
            var-type)
-          (lookup-type :|symbol| scope))
+          (lookup-type-raw :|symbol| scope))
          ((type-convertible
            value-type
            var-type
            scope)
-          (lookup-type :|symbol| scope))
+          (lookup-type-raw :|symbol| scope))
          (t
           (error 'type-incompatible :expression value :expected-type (var-def-type var-def))))))))
 ;; TODO: more builtin special ops and fs

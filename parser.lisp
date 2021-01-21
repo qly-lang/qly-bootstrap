@@ -28,6 +28,7 @@
    :qly-uint-p :qly-uint-value :qly-uint-base :qly-uint-type
    :qly-int-p :qly-int-value :qly-int-type
    :qly-symbol-p :qly-symbol-value
+   :qly-symbol
 
    :position-to-line-col
    :to-sexp
@@ -238,17 +239,10 @@
     (or colon-exp call-dot-exp-and-higher))
 
 (defrule call-dot-exp-and-higher
-    (or call-or-dot-exp primary-exp))
+    (or call-exp dot-exp primary-exp))
 
 (defrule primary-exp
     (or quote-exp unquote-exp splice-exp qly-array qly-atom))
-
-(defrule call-or-dot-exp (or call-exp dot-exp))
-
-(defrule mexp-except-colon (or call-or-dot-exp quote-exp unquote-exp splice-exp qly-array qly-atom))
-
-(defrule mexp-except-colon-dot-call (or quote-exp unquote-exp splice-exp
-                                        qly-array qly-atom))
 
 (defrule dot-exp (and call-dot-exp-and-higher (? whitespace) "." (? whitespace)
                       primary-exp)

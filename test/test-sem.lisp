@@ -28,6 +28,9 @@
 (defmethod to-sexp ((type (eql :untyped)))
   :untyped)
 
+(defmethod to-sexp ((type (eql nil)))
+  nil)
+
 (defmethod op-type ((type op-type))
   (list :op (mapcar 'to-sexp (op-type-params type)) (to-sexp (op-type-return type))))
 
@@ -42,8 +45,11 @@
 
 (defun type-def-env-is (expect env)
   (loop for (type . def) in expect
-        do (is (equalp def
-                       (to-sexp (type-def-def (gethash type (qly.sem::env-chain-%env env)))))))
+        do (progn
+             (if (null (gethash type (qly.sem::env-chain-%env env)))
+                 (error type))
+             (is (equalp def
+                         (to-sexp (type-def-def (gethash type (qly.sem::env-chain-%env env))))))))
   (is (= (length expect) (hash-table-count (qly.sem::env-chain-%env env)))))
 
 (defun type-def-env-subtype-has (expect env)
@@ -115,7 +121,6 @@ f[bar [x:int y:string]:uint]
 f[high [x:f[[]:nil] y:f[[]:uint]]:f[[uint]:uint]]
 "#))))
     (analyze-type sem)
-    (print sem)
     (var-def-env-is `((:|x| . (:fun () :untyped))
                       (:|foo| . (:fun (:untyped) :untyped))
                       (:|bar| . (:fun (:|int| :|string|) :|uint|))
@@ -138,22 +143,23 @@ t[b a]
                      (scope-type-defs (gethash :root (qly-sem-scopes sem))))))
 
 (test complex-type-def
-      (let ((sem (make-qly-sem
-                  (parse-qly-text
-                   #"
+  (let ((sem (make-qly-sem
+              (parse-qly-text
+               #"
 t[a f[[int]:int]]
 t[b [int]]
 t[c array[int]]
 t[d [c:int]]
 t[e struct[e:int]]
 "#))))
-        (analyze-type sem)
-        (type-def-env-is `((:|a| . ,(make-fun-type :return :|int| :params (list :|int|)))
-                           (:|b| . ,(make-array-type :elem-type :|int|))
-                           (:|c| . ,(make-array-type :elem-type :|int|))
-                           (:|d| . ,(make-struct-type :fields (list (make-struct-field :name :|c| :type :|int|))))
-                           (:|e| . ,(make-struct-type :fields (list (make-struct-field :name :|e| :type :|int|))))                          )
-                         (scope-type-defs (gethash :root (qly-sem-scopes sem))))))
+    (analyze-type sem)
+    (type-def-env-is `((:|a| . (:fun (:|int|) :|int|))
+                       (:|b| . (:array :|int|))
+                       (:|c| . (:array :|int|))
+                       (:|d| . (:struct
+                                (:|c| :|int|)))
+                       (:|e| . (:struct (:|e| :|int|)))                          )
+                     (scope-type-defs (gethash :root (qly-sem-scopes sem))))))
 
 (test recursive-type-def
   (let ((sem (make-qly-sem
@@ -170,17 +176,15 @@ t[type2:type1 [type1]]
 t[int:type1]
 "#))))
     (analyze-type sem)
-    (print sem)
     (type-def-env-is `((:|tree| . nil)
-                       (:|node| . ,(make-struct-type :fields
-                                                     (list
-                                                      (make-struct-field :name :|node| :type :|data|)
-                                                      (make-struct-field :name :|left| :type :|tree|)
-                                                      (make-struct-field :name :|right| :type :|tree|))))
+                       (:|node| . (:struct
+                                   (:|node| :|data|)
+                                   (:|left| :|tree|)
+                                   (:|right| :|tree|)))
                        (:|leaf| . :|data|)
                        (:|data| . :|int|)
                        (:|type1| . nil)
-                       (:|type2| . ,(make-array-type :elem-type :|type1|)))
+                       (:|type2| . (:array :|type1|)))
                      (scope-type-defs (gethash :root (qly-sem-scopes sem))))
     (type-def-env-subtype-has `((:|tree| . (:|node| :|leaf|))
                                 (:|type1| .(:|int| :|type2|)))
@@ -215,7 +219,7 @@ f[foo [var1]
                      (scope-type-defs (gethash :root (qly-sem-scopes sem))))
     (var-def-env-is `((:|var1| . :|type1|)
                       (:|var2| . :|type1|)
-                      (:|foo| . ,(make-fun-type :return :untyped :params (list :untyped))))
+                      (:|foo| . (:fun (:untyped) :untyped)))
                     (scope-var-defs (gethash :root (qly-sem-scopes sem))))
     (let ((foo-scope (gethash
                       (var-def-mexp (lookup :|foo|
@@ -256,19 +260,20 @@ a"#))))
     (analyze-type sem)
     (signals undefined-var (resolve-var sem))))
 
-(test resolve-var-def
-  (let ((sem (make-qly-sem (parse-qly-text #"
-#v[x:bool true]
-v[y:int 2]
-#v[z:uint 0x1]
-#v[a:string "aaa"]"#))))
-    (analyze-type sem)
-    (resolve-var sem)
-    ))
+;; (test resolve-var-def
+;;   (let ((sem (make-qly-sem (parse-qly-text #"
+;; #v[x:bool true]
+;; v[y:int 2]
+;; #v[z:uint 0x1]
+;; #v[a:string "aaa"]
+;; "#))))
+;;     (analyze-type sem)
+;;     (resolve-var sem)
+;;     ))
 
-(test resolve-int-cast
-  (let ((sem (make-qly-sem (parse-qly-text #"
-v[x:int32 2]
-"#))))
-    (analyze-type sem)
-    (resolve-var sem)))
+;; (test resolve-int-cast
+;;   (let ((sem (make-qly-sem (parse-qly-text #"
+;; v[x:int32 2]
+;; "#))))
+;;     (analyze-type sem)
+;;     (resolve-var sem)))
