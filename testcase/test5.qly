@@ -1,5 +1,0 @@
-t[intlist or[nil [hd: int tl: intlist]]]
-t[tree [key: int children: treelist]]
-t[treelist [hd: tree tl: treelist]]
-v[lis: intlist [hd: 0 tl: nil]]
-lis

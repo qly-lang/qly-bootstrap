@@ -1,2 +1,0 @@
-f[nfactor [n] if[=[n 0] b[print[n] 1] *[n nfactor[n-1]]]]
-nfactor[10]

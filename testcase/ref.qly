@@ -1,9 +1,0 @@
-t[x struct[a:string b:string]]
-t[y struct[x1:x x2:x]]
-v[obj-y1 [x1:[a:"aa" b:"bb"]]]
-v[obj-x1 [x1:[a:"aaa" b:"bbb"] x2:[a:"a" b:"b"]]] # implictly create x10 x20, ref them here, (only optimize to move if there's no future ref to it)
-v[obj-x2 [x1:obj-x1 x2:obj-x1]] # ref x1 twice
-
-Future qly:
-inline? if in case want such optimization, must be declared in type def:
-t[z struct[x1:i[x] x2:i[x]]] which means is not a ref, but "inlined" or "included"
