@@ -2,7 +2,7 @@ import java.nio.file.Path
 import scala.util.parsing.combinator.{PackratParsers, RegexParsers}
 import scala.util.parsing.input.{CharSequenceReader, Reader}
 
-class QlyParserError(val location: Location, val msg: String) extends QlyCompilationError
+class QlySyntaxError(val location: Location, val msg: String) extends QlyCompilationError
 
 case class Location(line: Int, column: Int) {
   override def toString = s"line: $line, column: $column"
@@ -12,20 +12,20 @@ object QlyParser extends RegexParsers with PackratParsers {
   override def skipWhitespace: Boolean = false
 
   // TODO: human understandable error message
-  @throws(classOf[QlyParserError])
+  @throws(classOf[QlySyntaxError])
   def apply(code: String): AST = {
     val reader = new PackratReader(new CharSequenceReader(code))
     phrase(mexps)(reader) match {
       case NoSuccess(msg, next) => {
         println(next.pos)
         println(msg)
-        throw new QlyParserError(Location(next.pos.line, next.pos.column), msg)
+        throw new QlySyntaxError(Location(next.pos.line, next.pos.column), msg)
       }
       case Success(result, next) => new AST(result)
     }
   }
 
-  @throws(classOf[QlyParserError])
+  @throws(classOf[QlySyntaxError])
   def apply(path: Path): AST = {
     val file = scala.io.Source.fromFile(path.toString)
     val result = apply(file.mkString)

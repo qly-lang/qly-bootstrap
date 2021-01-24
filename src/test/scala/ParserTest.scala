@@ -73,8 +73,8 @@ class ParserTest extends FreeSpec {
         """"a\\n""""
       ).toString shouldEqual("""("a\\n")""")
       QlyParser("""""""").toString shouldEqual("""("")""")
-      the [QlyParserError] thrownBy(QlyParser("""aa""""))
-      the [QlyParserError] thrownBy(QlyParser(""""aa"""))
+      the [QlySyntaxError] thrownBy(QlyParser("""aa""""))
+      the [QlySyntaxError] thrownBy(QlyParser(""""aa"""))
     }
 
     "Parse atom" in {
@@ -138,7 +138,7 @@ class ParserTest extends FreeSpec {
     "Parse quote, unquote and splice" in {
       QlyParser("'a").toString shouldEqual("((' a))")
       QlyParser("''a").toString shouldEqual("((' (' a)))")
-      the [QlyParserError] thrownBy(QlyParser("'"))
+      the [QlySyntaxError] thrownBy(QlyParser("'"))
       QlyParser("' ,a").toString shouldEqual("((' (, a)))")
       QlyParser("',a").toString shouldEqual("((' (, a)))")
       QlyParser("', a").toString shouldEqual("((' (, a)))")
