@@ -2,7 +2,9 @@ trait QlyCompilationError extends Throwable
 
 trait QlySemanticError extends QlyCompilationError
 
-class UndefinedVariable(val variable: QlySymbol) extends QlySemanticError
-class UndefinedType(val typeName: QlySymbol) extends QlySemanticError
-class IncompatibleType(val exp: MExp, val expectedType: TypeExp)
-
+case class UndefinedVariable(variable: QlySymbol) extends QlySemanticError
+case class UndefinedType(typeName: QlySymbol) extends QlySemanticError
+case class IncompatibleType(exp: MExp, expectedType: TypeExp) extends QlySemanticError
+case class MalformedType(exp: MExp, msg: String) extends QlySemanticError
+case class MalformedOp(exp: MExp, msg: String) extends QlySemanticError
+case class TypeAlreadyDefinedInScope(prevDef: TypeDef) extends QlySemanticError

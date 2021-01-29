@@ -1,5 +1,10 @@
+class A()
+class B() extends A
+val b = List(new B())
+b.head.getClass == classOf[A]
+b.head.getClass == classOf[B]
 
-import scala.collection.mutable.Map
-val c:Map[String, Int] = Map("a" -> 3)
-c("a")
-c.getOrElse("b", None)
+val f = (b: Seq[A]) => {
+  b.head
+}
+f(b)

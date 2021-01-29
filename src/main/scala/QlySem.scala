@@ -1,210 +1,190 @@
 import scala.collection.mutable
 
 class QlySem(val ast: AST) {
+  val rootScope = new Scope()
   val scopes: mutable.Map[MExp, Scope] = mutable.Map[MExp, Scope]()
   val symbolScopes: mutable.Map[QlySymbol, Scope] =
     mutable.Map[QlySymbol, Scope]()
-}
 
-class Scope(
-    val parent: Option[Scope] = Some(BuiltinScope),
-    val mexp: Option[MExp] = None
-) {
-  val varDefs: EnvChain[String, VarDef] = new EnvChain(
-    parent.map(parent => parent.varDefs)
-  )
-  val typeDefs: EnvChain[String, TypeDef] = new EnvChain(
-    parent.map(parent => parent.typeDefs)
-  )
-  def lookupVar(sym: QlySymbol): Option[VarDef] =
-    lookupVarDirect(sym).orElse(parent match {
-      case Some(scope) => scope.lookupVar(sym)
-      case None        => None
-    })
-  def lookupVarDirect(sym: QlySymbol) =
-    varDefs.lookupDirect(sym.value) match {
-      case Some(varDef) =>
-        varDef.mexp match {
-          case Some(mexp) => if (mexp.pos < sym.pos) Some(varDef) else None
-          case None       => Some(varDef)
-        }
-      case None => None
-    }
-  def setVar(sym: QlySymbol, varDef: VarDef) = varDefs.set(sym.value, varDef)
-  def setVar(name: String, varDef: VarDef) = varDefs.set(name, varDef)
-  def lookupTypeDirect(sym: QlySymbol) =
-    typeDefs.lookupDirect(sym.value) match {
-      case Some(typeDef) =>
-        typeDef.mexp match {
-          case Some(mexp) => if (mexp.pos < sym.pos) Some(typeDef) else None
-          case None       => Some(typeDef)
-        }
-      case None => None
-    }
-  def lookupType(sym: QlySymbol): Option[TypeDef] =
-    lookupTypeDirect(sym).orElse(parent match {
-      case Some(scope) => scope.lookupType(sym)
-      case None        => None
-    })
-  def setType(sym: QlySymbol, typeDef: TypeDef) =
-    typeDefs.set(sym.value, typeDef)
-  def setType(name: String, typeDef: TypeDef) = typeDefs.set(name, typeDef)
-}
+  def analyzeType() = {
+    analyzeTypeMExps(ast.mexps, rootScope)
+    this
+  }
 
-object BuiltinScope extends Scope(parent = None) {
-  def addType(name: String) = {
-    val typeExp = new PrimitiveType(name)
-    setType(
-      name,
-      new TypeDef(
-        name,
-        d = typeExp,
-        expanded = typeExp
-      )
+  def resolveVar() = {
+    ast.mexps.foreach(m => resolveVarMExp(m, rootScope))
+    this
+  }
+
+  def analyzeTypeMExps(mexps: Seq[MExp], scope: Scope) = {
+    mexps.foreach(analyzeTypeMExpOut(_, scope))
+    mexps.foreach(analyzeTypeMExpIn(_, scope))
+  }
+
+  def analyzeTypeMExpOut(mexp: MExp, scope: Scope) = {
+    mexp match {
+      case CallExp(QlySymbol("v"), List(ColonExp(QlySymbol(variable), t), _)) =>
+        // v[variable : t _]
+        val ty = processType(t, scope)
+        scope.setVar(
+          variable,
+          new VarDef(variable, Some(mexp), ty, typeExpanded = expandType(ty, scope), scope = scope)
+        )
+      case CallExp(QlySymbol("f"), QlySymbol(fname) :: signature :: mexps) =>
+        // f[fname signature mexps]
+        val t = signature match {
+          case ColonExp(QlyArray(params), returnType) => FunType(processParamTypes(params, scope), processType(returnType, scope))
+          case QlyArray(params)                       => FunType(processParamTypes(params, scope), Untyped)
+        }
+        scope.setVar(fname, new VarDef(fname, Some(mexp), t = t, typeExpanded = expandType(t, scope), scope = scope))
+      case CallExp(QlySymbol("t"), args) =>
+        // t[...]
+        args match {
+          case (t: QlySymbol) :: Nil =>
+            // t[type1]
+            val d = scope.lookupTypeDirect(t)
+            if (d.isDefined) {
+              throw TypeAlreadyDefinedInScope(d.get)
+            }
+            val td = new TypeDef(t.value, Some(mexp), d = PrimitiveType(t.value), expanded = PrimitiveType(t.value), scope = scope)
+            scope.setType(t, td)
+          case (t: QlySymbol) :: typeDef :: Nil =>
+            // t[type1 typeDef]
+            val d = scope.lookupTypeDirect(t)
+            if (d.isDefined) {
+              throw TypeAlreadyDefinedInScope(d.get)
+            }
+            val de = processType(typeDef, scope)
+            val td = new TypeDef(t.value, Some(mexp), d = de, expanded = expandType(de, scope), scope = scope)
+            scope.setType(t, td)
+          case ColonExp(t: QlySymbol, st: QlySymbol) :: Nil =>
+            // t[type1:superType]
+            if (scope.lookupType(t).isEmpty) {
+              scope.setType(t, new TypeDef(t.value, Some(mexp), d = PrimitiveType(t.value), expanded = PrimitiveType(t.value), scope = scope))
+            }
+            val superType = scope.lookupType(st).getOrElse(throw UndefinedType(st))
+            scope.lookupType(t).get.setSuper(superType)
+          case ColonExp(t: QlySymbol, st: QlySymbol) :: typeDef :: Nil =>
+            val d = scope.lookupTypeDirect(t)
+            if (d.isDefined) {
+              throw TypeAlreadyDefinedInScope(d.get)
+            }
+            val de = processType(typeDef, scope)
+            val superType = scope.lookupType(st).getOrElse(throw UndefinedType(st))
+            val td = new TypeDef(t.value, Some(mexp), d = de, expanded = expandType(de, scope), scope = scope)
+            td.setSuper(superType)
+            scope.setType(t, td)
+          case _ => throw MalformedOp(mexp, "t should be t[type], t[type:supertype], t[type typedef] or t[type:supertype typedef]")
+        }
+    }
+  }
+
+  def processParamTypes(params: List[MExp], scope: Scope): List[TypeExp] = {
+    params.map(param => {
+      if (param.getClass != classOf[ColonExp]) {
+        throw MalformedOp(param, "expect param:type in param lists")
+      }
+      processType(param.asInstanceOf[ColonExp].col, scope)
+    })
+  }
+
+  def processType(t: MExp, scope: Scope): TypeExp = {
+    t match {
+      case sym: QlySymbol =>
+        val referTo = scope.lookupType(sym)
+        if (referTo.isEmpty) {
+          throw UndefinedType(sym)
+        } else {
+          Refer(to = referTo.get)
+        }
+      case QlyArray(elems) =>
+        if (elems.forall(elem => elem.getClass == classOf[ColonExp])) {
+          StructType(
+            elems.map(elem => processFieldType(elem.asInstanceOf[ColonExp], scope))
+          )
+        } else if (elems.length == 1) {
+          ArrayType(processType(elems.head, scope))
+        } else {
+          throw MalformedType(
+            t,
+            "Pattern in [] need to be either a type of a list of field:type"
+          )
+        }
+      case CallExp(QlySymbol("array"), args) =>
+        if (args.length != 1) {
+          throw MalformedType(
+            t,
+            "there should be one and only one type indicate as array element"
+          )
+        }
+        ArrayType(processType(args.head, scope))
+      case CallExp(QlySymbol("struct"), args) =>
+        if (args.exists(elem => elem.getClass != classOf[ColonExp])) {
+          throw MalformedType(t, "struct[] fields should be colon exps")
+        }
+        StructType(
+          args.map(arg => processFieldType(arg.asInstanceOf[ColonExp], scope))
+        )
+      case CallExp(QlySymbol("f"), List(ColonExp(QlyArray(types), returnType))) =>
+        FunType(
+          types.map(t => processType(t, scope)),
+          processType(returnType, scope)
+        )
+      case _ => throw MalformedType(t, "Unknown pattern of type")
+    }
+  }
+
+  def processFieldType(colonExp: ColonExp, scope: Scope): StructField = {
+    if (colonExp.value.getClass != classOf[QlySymbol]) {
+      throw MalformedType(colonExp, "Struct field name need to be symbol")
+    }
+    StructField(
+      colonExp.value.asInstanceOf[QlySymbol].value,
+      processType(colonExp.col, scope)
     )
   }
 
-  val types = Vector(
-    "nil",
-    "any",
-    "symbol",
-    "int",
-    "uint",
-    "int8",
-    "int16",
-    "int32",
-    "int64",
-    "int128",
-    "fixint",
-    "bigint",
-    "uint8",
-    "uint16",
-    "uint32",
-    "uint64",
-    "uint128",
-    "fixuint",
-    "biguint",
-    "fixnum",
-    "real",
-    "float32",
-    "float64",
-    "decimal",
-    "number",
-    "bool",
-    "mexp",
-    "char"
-  )
-
-  types.foreach(addType)
-
-  val asciiTypeExp = new RangeType(0, 127)
-  setType(
-    "ascii-char",
-    new TypeDef("ascii-char", d = asciiTypeExp, expanded = asciiTypeExp)
-  )
-
-  val extendCharTypeExp = new RangeType(0, 1114111)
-  setType(
-    "extend-char",
-    new TypeDef(
-      "extend-char",
-      d = extendCharTypeExp,
-      expanded = extendCharTypeExp
-    )
-  )
-
-  val stringTypeExp = new ArrayType(new PrimitiveType("char"))
-  setType(
-    "string",
-    new TypeDef("string", d = stringTypeExp, expanded = stringTypeExp)
-  )
-
-  def setBuiltinSuperType(child: String, parent: String) =
-    typeDefs.lookup(child).get.setSuper(typeDefs.lookup(parent).get)
-
-  val superTypes = Vector(
-    ("fixint", "int"),
-    ("bigint", "int"),
-    ("fixuint", "uint"),
-    ("biguint", "uint"),
-    ("int8", "fixint"),
-    ("int16", "fixint"),
-    ("int32", "fixint"),
-    ("int64", "fixint"),
-    ("int128", "fixint"),
-    ("uint8", "fixuint"),
-    ("uint16", "fixuint"),
-    ("uint32", "fixuint"),
-    ("uint64", "fixuint"),
-    ("uint128", "fixuint"),
-    ("fixint", "fixnum"),
-    ("fixuint", "fixnum"),
-    ("ascii-char", "char"),
-    ("extend-char", "char"),
-    ("float32", "real"),
-    ("float64", "real"),
-    ("decimal", "real"),
-    ("int", "number"),
-    ("uint", "number"),
-    ("fixnum", "number"),
-    ("real", "number")
-  )
-  superTypes.map(s => setBuiltinSuperType(s._1, s._2))
-
-  val builtinVars: Vector[(String, TypeExp)] = Vector(
-    ("true", new PrimitiveType("bool"))
-  )
-
-  def setBuiltinVar(name: String, t: TypeExp) =
-    setVar(name, new VarDef(name, t = t, typeExpanded = t))
-
-  builtinVars.map(s => setBuiltinVar(s._1, s._2))
-}
-
-class EnvChain[K, V](val parent: Option[EnvChain[K, V]] = None) {
-  val env: mutable.Map[K, V] = mutable.Map[K, V]()
-  def lookupDirect(name: K): Option[V] = env.get(name)
-  def lookup(name: K): Option[V] =
-    env
-      .get(name)
-      .orElse(parent match {
-        case Some(envChain) => envChain.lookup(name)
-        case None           => None
-      })
-  def set(name: K, v: V): Unit = env(name) = v
-}
-
-class VarDef(
-    val name: String,
-    val mexp: Option[MExp] = None,
-    val t: TypeExp,
-    val occurs: mutable.Set[QlySymbol] = mutable.Set(),
-    val typeExpanded: TypeExp,
-    val scope: Scope = BuiltinScope
-)
-
-class TypeDef(
-    val name: String,
-    val mexp: Option[MExp] = None,
-    val d: TypeExp,
-    val expanded: TypeExp,
-    val parents: mutable.Set[TypeDef] = mutable.Set(),
-    val children: mutable.Set[TypeDef] = mutable.Set(),
-    val scope: Scope = BuiltinScope
-) {
-  def setSuper(s: TypeDef) = {
-    parents.add(s)
-    s.children.add(this)
+  def expandType(t: TypeExp, scope: Scope): TypeExp = {
+    t match {
+      case Untyped                     => Untyped
+      case p: PrimitiveType            => p
+      case FunType(params, r)          => FunType(params.map(p => expandType(p, scope)), expandType(r, scope))
+      case r: RangeType                => r
+      case ArrayType(e)                => ArrayType(expandType(e, scope))
+      case StructType(fields)          => StructType(fields.map(f => StructField(f.name, expandType(f.t, scope))))
+      case OpType(maybeParams, maybeR) => OpType(maybeParams.map(params => params.map(p => expandType(p, scope))), maybeR.map(r => expandType(r, scope)))
+      case Refer(to)                   => to.expanded
+    }
   }
+
+  def analyzeTypeMExpIn(mexp: MExp, scope: Scope) = {
+    mexp match {
+      case CallExp(QlySymbol("f"), List(fname: QlySymbol, signature, mexps)) => {
+        val newScope = new Scope(Some(scope), Some(mexp))
+        scopes(mexp) = newScope
+        signature match {
+          case ColonExp(QlyArray(params), _) => processParamVars(params, newScope)
+          case QlyArray(params)              => processParamVars(params, newScope)
+          case _                             => throw MalformedOp("Function signature should be either [param:type ...] or [param:type ...]:return-type")
+        }
+      }
+    }
+  }
+
+  def processParamVars(params: List[MExp], scope: Scope) = {
+    params.foreach(param => {
+      if (param.getClass != classOf[ColonExp]) {
+        throw MalformedOp(param, "function param should be colon exp")
+      }
+      val colonExp = param.asInstanceOf[ColonExp];
+      val t = processType(colonExp.col, scope)
+      if (colonExp.value.getClass != classOf[QlySymbol]) {
+        throw MalformedOp(param, "function param name should be symbol")
+      }
+      val name = t.asInstanceOf[QlySymbol].value
+      scope.setVar(name, new VarDef(name, Some(param), t = t, typeExpanded = expandType(t, scope), scope = scope))
+    })
+  }
+
+  def resolveVarMExp(mexp: MExp, scope: Scope) = {}
 }
-
-trait TypeExp
-
-class PrimitiveType(val name: String) extends TypeExp
-class FunType(val params: Seq[TypeExp], val returnType: TypeExp) extends TypeExp
-class RangeType(val start: BigInt, val end: BigInt) extends TypeExp
-class ArrayType(val elemType: TypeExp) extends TypeExp
-class StructType(val fields: Seq[StructField]) extends TypeExp
-class StructField(val name: String, val t: TypeExp)
-class OpType(val params: Seq[TypeExp], val returnType: TypeExp) extends TypeExp
-class ExactType(val value: MExp)

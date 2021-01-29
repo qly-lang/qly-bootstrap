@@ -2,7 +2,8 @@ import java.nio.file.Path
 import scala.util.parsing.combinator.{PackratParsers, RegexParsers}
 import scala.util.parsing.input.{CharSequenceReader, Reader}
 
-class QlySyntaxError(val location: Location, val msg: String) extends QlyCompilationError
+case class QlySyntaxError(location: Location, msg: String)
+    extends QlyCompilationError
 
 case class Location(line: Int, column: Int) {
   override def toString = s"line: $line, column: $column"
@@ -19,7 +20,7 @@ object QlyParser extends RegexParsers with PackratParsers {
       case NoSuccess(msg, next) => {
         println(next.pos)
         println(msg)
-        throw new QlySyntaxError(Location(next.pos.line, next.pos.column), msg)
+        throw QlySyntaxError(Location(next.pos.line, next.pos.column), msg)
       }
       case Success(result, next) => new AST(result)
     }
@@ -50,8 +51,8 @@ object QlyParser extends RegexParsers with PackratParsers {
   }
 
   lazy val colonExp: PackratParser[ColonExp] = positioned {
-    callDotExpAndHigher ~ (whitespace.? ~> ':' <~ whitespace.?) ~ colonExpAndHigher ^^  {
-      case v ~ _ ~ c => new ColonExp(v, c)
+    callDotExpAndHigher ~ (whitespace.? ~> ':' <~ whitespace.?) ~ colonExpAndHigher ^^ {
+      case v ~ _ ~ c => ColonExp(v, c)
     }
   }
 
@@ -61,109 +62,123 @@ object QlyParser extends RegexParsers with PackratParsers {
 
   lazy val callExp: PackratParser[CallExp] = positioned {
     callDotExpAndHigher ~ qlyArray ^^ {
-      case v ~ a => new CallExp(v, a.value)
+      case v ~ a => CallExp(v, a.value)
     }
   }
 
   lazy val dotExp: PackratParser[DotExp] = positioned {
     callDotExpAndHigher ~ (whitespace.? ~> '.' <~ whitespace.?) ~ primaryExp ^^ {
-      case v ~ _ ~ d => new DotExp(v, d)
+      case v ~ _ ~ d => DotExp(v, d)
     }
   }
 
-  def primaryExp: Parser[MExp] = positioned {
-    quoteExp | unquoteExp | spliceExp | qlyArray | atom
-  }
-
-  def qlyArray: Parser[QlyArray] = positioned {
-    '[' ~ mexps ~ ']' ^^ {
-      case _ ~ elems ~ _ => new QlyArray(elems)
+  def primaryExp: Parser[MExp] =
+    positioned {
+      quoteExp | unquoteExp | spliceExp | qlyArray | atom
     }
-  }
 
-  def quoteExp: Parser[QuoteExp] = positioned {
-    '\'' ~ whitespaceAndMexp ^^ {
-      case _ ~ m => new QuoteExp(m)
-    }
-  }
-
-  def unquoteExp: Parser[UnquoteExp] = positioned {
-    ',' ~ whitespaceAndMexp ^^ {
-      case _ ~ m => new UnquoteExp(m)
-    }
-  }
-
-  def spliceExp: Parser[SpliceExp] = positioned {
-    '@' ~ whitespaceAndMexp ^^ {
-      case _ ~ m => new SpliceExp(m)
-    }
-  }
-
-  def atom: Parser[Atom] = positioned {
-    qlyString | qlyReal | qlyUInt | qlyInt | qlySymbol
-  }
-
-  def qlyString: Parser[QlyString] = positioned {
-    """"((\\[\d\D])|([^"]))*"""".r ^^ {
-      s => new QlyString(s.drop(1).dropRight(1).replaceAll("""\\([\d\D])""","$1"))
-    }
-  }
-
-  def qlyReal: Parser[QlyReal] = positioned {
-    """[-+]?([0-9]*[.][0-9]*([eE][-+]?[0-9]+)?)|([0-9]+[eE][-+]?[0-9]+)""".r <~ guard(not(symbolChar)) ^^ {
-      s => {
-        val d = BigDecimal(s)
-        if (d.isExactDouble) new QlyFloat64(d.toDouble) else new QlyDecimal(d)
+  def qlyArray: Parser[QlyArray] =
+    positioned {
+      '[' ~ mexps ~ ']' ^^ {
+        case _ ~ elems ~ _ => QlyArray(elems)
       }
     }
-  }
 
-  def qlyInt: Parser[QlyInt] = positioned {
-    """[-+]?[0-9]+""".r <~ guard(not(symbolChar)) ^^ {
-      s => {
-        val i = BigInt(s)
-        if (i.isValidInt)
-          new QlyInt32(i.toInt)
-        else if (i.isValidLong)
-          new QlyInt64(i.toLong)
-        else if (i < BigInt(2).pow(127) && i >= -BigInt(2).pow(127))
-          new QlyInt128(i)
-        else
-          new QlyBigInt(i)
+  def quoteExp: Parser[QuoteExp] =
+    positioned {
+      '\'' ~ whitespaceAndMexp ^^ {
+        case _ ~ m => QuoteExp(m)
       }
     }
-  }
 
-  def qlyUInt: Parser[QlyUInt] = positioned {
-    """(0x[0-9a-f]+)|(0o[0-7]+)|(0b[01]+)""".r <~ guard(not(symbolChar)) ^^ {
-      s => {
-        val b = s.drop(1).head
-        val base = if (b == 'x') 16 else if (b == 'o') 8 else 2
-        val u = BigInt(s.drop(2), base)
-        if (u < BigInt(2).pow(32)) {
-          new QlyUInt32(u, base)
-        } else if (u < BigInt(2).pow(64)) {
-          new QlyUInt64(u, base)
-        } else if (u < BigInt(2).pow(128)) {
-          new QlyUInt128(u, base)
-        } else {
-          new QlyBigUInt(u, base)
+  def unquoteExp: Parser[UnquoteExp] =
+    positioned {
+      ',' ~ whitespaceAndMexp ^^ {
+        case _ ~ m => UnquoteExp(m)
+      }
+    }
+
+  def spliceExp: Parser[SpliceExp] =
+    positioned {
+      '@' ~ whitespaceAndMexp ^^ {
+        case _ ~ m => SpliceExp(m)
+      }
+    }
+
+  def atom: Parser[Atom] =
+    positioned {
+      qlyString | qlyReal | qlyUInt | qlyInt | qlySymbol
+    }
+
+  def qlyString: Parser[QlyString] =
+    positioned {
+      """"((\\[\d\D])|([^"]))*"""".r ^^ { s =>
+        new QlyString(s.drop(1).dropRight(1).replaceAll("""\\([\d\D])""", "$1"))
+      }
+    }
+
+  def qlyReal: Parser[QlyReal] =
+    positioned {
+      """[-+]?([0-9]*[.][0-9]*([eE][-+]?[0-9]+)?)|([0-9]+[eE][-+]?[0-9]+)""".r <~ guard(
+        not(symbolChar)
+      ) ^^ { s =>
+        {
+          val d = BigDecimal(s)
+          if (d.isExactDouble) QlyFloat64(d.toDouble) else QlyDecimal(d)
         }
       }
     }
-  }
 
-  def qlySymbol: Parser[QlySymbol] = positioned {
-    symbolChar.+ ^^ {
-      s => new QlySymbol(s.mkString.replaceAll("""\\([\d\D])""","$1"))
+  def qlyInt: Parser[QlyInt] =
+    positioned {
+      """[-+]?[0-9]+""".r <~ guard(not(symbolChar)) ^^ { s =>
+        {
+          val i = BigInt(s)
+          if (i.isValidInt)
+            QlyInt32(i.toInt)
+          else if (i.isValidLong)
+            QlyInt64(i.toLong)
+          else if (i < BigInt(2).pow(127) && i >= -BigInt(2).pow(127))
+            QlyInt128(i)
+          else
+            QlyBigInt(i)
+        }
+      }
     }
-  }
+
+  def qlyUInt: Parser[QlyUInt] =
+    positioned {
+      """(0x[0-9a-f]+)|(0o[0-7]+)|(0b[01]+)""".r <~ guard(not(symbolChar)) ^^ {
+        s =>
+          {
+            val b = s.drop(1).head
+            val base = if (b == 'x') 16 else if (b == 'o') 8 else 2
+            val u = BigInt(s.drop(2), base)
+            if (u < BigInt(2).pow(32)) {
+              QlyUInt32(u, base)
+            } else if (u < BigInt(2).pow(64)) {
+              QlyUInt64(u, base)
+            } else if (u < BigInt(2).pow(128)) {
+              QlyUInt128(u, base)
+            } else {
+              QlyBigUInt(u, base)
+            }
+          }
+      }
+    }
+
+  def qlySymbol: Parser[QlySymbol] =
+    positioned {
+      symbolChar.+ ^^ { s =>
+        QlySymbol(s.mkString.replaceAll("""\\([\d\D])""", "$1"))
+      }
+    }
 
   def symbolChar: Parser[Char] = {
-    """\\[\d\D]""".r ^^ {
-      escapeChar => escapeChar.charAt(1)
-    } | """[^\s.\[\]:"\\',@#]""".r ^^ {
-      char => char.head
+    """\\[\d\D]""".r ^^ { escapeChar =>
+      escapeChar.charAt(1)
+    } | """[^\s.\[\]:"\\',@#]""".r ^^ { char =>
+      char.head
     }
   }
 
