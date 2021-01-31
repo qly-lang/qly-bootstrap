@@ -1,0 +1,11 @@
+t[generic]
+t[exp:generic [x:int]]
+t[sym:generic [x:int]]
+
+g[do-something [x:generic]:string]
+m[do-something [x:exp]
+  "exp"]
+m[do-something [x:sym]
+  "sym"]
+
+do-something[[x:3]] # compilation error

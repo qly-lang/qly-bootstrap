@@ -1,0 +1,17 @@
+t[a int]
+t[b int]
+t[c a]
+
+v[x:int 2]
+v[y:a 2]
+v[z:b 2]
+v[w:c 2]
+
+expect[x].toEq[2]
+expect[type[x]].=['int]
+expect[type[y]].=['a]
+expect[type[z]].=['b]
+expect[type[w]].=['c]
+expect[y].=[new[a 2]]
+expect[w].!=[new[c 2]]
+expect[y].!=[z]

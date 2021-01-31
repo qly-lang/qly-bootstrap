@@ -8,3 +8,5 @@ case class IncompatibleType(exp: MExp, expectedType: TypeExp) extends QlySemanti
 case class MalformedType(exp: MExp, msg: String) extends QlySemanticError
 case class MalformedOp(exp: MExp, msg: String) extends QlySemanticError
 case class TypeAlreadyDefinedInScope(prevDef: TypeDef) extends QlySemanticError
+case class MalformedExp(exp: MExp, msg: String) extends QlySemanticError
+case class Unimplemented(exp: MExp, msg: String) extends QlySemanticError

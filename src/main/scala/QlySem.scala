@@ -186,5 +186,56 @@ class QlySem(val ast: AST) {
     })
   }
 
-  def resolveVarMExp(mexp: MExp, scope: Scope) = {}
+  def resolveVarMExp(mexp: MExp, scope: Scope): TypeExp = {
+    mexp match {
+      case s: QlySymbol    => resolveVarQlySymbol(s, scope)
+      case _: ColonExp     => throw MalformedExp(mexp, "Colon Exp can only appeared in var, type and function definition")
+      case QlyArray(elems) => ArrayType(commonType(elems.map(mexp => resolveVarMExp(mexp, scope))))
+      case c: CallExp      => resolveVarCallExp(c, scope)
+      case i: QlyInt =>
+        i match {
+          case _: QlyInt8   => PrimitiveType("int8")
+          case _: QlyInt16  => PrimitiveType("int16")
+          case _: QlyInt32  => PrimitiveType("int32")
+          case _: QlyInt64  => PrimitiveType("int64")
+          case _: QlyInt128 => PrimitiveType("int128")
+          case _: QlyBigInt => PrimitiveType("bigint")
+        }
+      case u: QlyUInt =>
+        u match {
+          case _: QlyUInt8   => PrimitiveType("uint8")
+          case _: QlyUInt16  => PrimitiveType("uint16")
+          case _: QlyUInt32  => PrimitiveType("uint32")
+          case _: QlyUInt64  => PrimitiveType("uint64")
+          case _: QlyUInt128 => PrimitiveType("uint128")
+          case _: QlyBigUInt => PrimitiveType("biguint")
+        }
+      case r: QlyReal => {
+        r match {
+          case _: QlyFloat32 => PrimitiveType("float32")
+          case _: QlyFloat64 => PrimitiveType("float64")
+          case _: QlyDecimal => PrimitiveType("decimal")
+        }
+      }
+      case _: QlyString => PrimitiveType("string")
+      case _            => throw Unimplemented(mexp, "Unimplemented resolve type " + mexp.getClass.toString)
+    }
+  }
+
+  def resolveVarQlySymbol(symbol: QlySymbol, scope: Scope) = {
+    val d = scope.lookupVar(symbol)
+    if (d.isDefined) {
+      symbolScopes(symbol) = scope
+      d.get.occurs.add(symbol)
+      d.get.typeExpanded
+    } else {
+      throw UndefinedVariable(symbol)
+    }
+  }
+
+  def commonType(value: List[TypeExp]) = {
+    value.reduce((t1, t2) => if (t1.isSuperOrSame(t2)) t1 else (t1.superTypeList.findFirst(t1s => t2.superTypeList.contains(t1s))))
+  }
+
+  def resolveVarCallExp(exp: CallExp, scope: Scope) = {}
 }

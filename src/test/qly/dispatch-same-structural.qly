@@ -1,0 +1,15 @@
+t[generic]
+t[exp:generic [x:int]]
+
+g[do-something [x:generic]:string]
+m[do-something [x:exp]
+  "exp"]
+
+print[do-something[[x:3]]]
+
+t[sym:generic [x:int]]
+m[do-something [x:sym]
+  "sym"]
+
+print[do-something[exp[x:3]]]
+print[do-something[sym[x:3]]]
