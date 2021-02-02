@@ -2,15 +2,7 @@ import scala.collection.mutable
 
 object BuiltinScope extends Scope(parent = None) {
   def addType(name: String) = {
-    val typeExp = PrimitiveType(name)
-    setType(
-      name,
-      new TypeDef(
-        name,
-        d = typeExp,
-        expanded = typeExp
-      )
-    )
+    setType(name, new TypeDef(name))
   }
 
   val types = Vector(
@@ -49,7 +41,7 @@ object BuiltinScope extends Scope(parent = None) {
   val asciiTypeExp = RangeType(0, 127)
   setType(
     "ascii-char",
-    new TypeDef("ascii-char", d = asciiTypeExp, expanded = asciiTypeExp)
+    new TypeDef("ascii-char", d = Some(asciiTypeExp))
   )
 
   val extendCharTypeExp = RangeType(0, 1114111)
@@ -57,15 +49,14 @@ object BuiltinScope extends Scope(parent = None) {
     "extend-char",
     new TypeDef(
       "extend-char",
-      d = extendCharTypeExp,
-      expanded = extendCharTypeExp
+      d = Some(extendCharTypeExp)
     )
   )
 
   val stringTypeExp = ArrayType(PrimitiveType("char"))
   setType(
     "string",
-    new TypeDef("string", d = stringTypeExp, expanded = stringTypeExp)
+    new TypeDef("string", d = Some(stringTypeExp))
   )
 
   def setBuiltinSuperType(child: String, parent: String) =
@@ -101,11 +92,11 @@ object BuiltinScope extends Scope(parent = None) {
   superTypes.map(s => setBuiltinSuperType(s._1, s._2))
 
   val builtinVars: Vector[(String, TypeExp)] = Vector(
-    ("true", PrimitiveType("bool")),
-    ("false", PrimitiveType("bool")),
-    ("v", OpType(returnType = Some(PrimitiveType("symbol")))),
-    ("f", OpType(returnType = Some(PrimitiveType("symbol")))),
-    ("t", OpType(returnType = Some(PrimitiveType("symbol")))),
+    ("true", Refer(typeDefs.lookupDirect("bool").get)),
+    ("false", Refer(typeDefs.lookupDirect("bool").get)),
+    ("v", OpType(returnType = Some(Refer(typeDefs.lookupDirect("symbol").get)))),
+    ("f", OpType(returnType = Some(Refer(typeDefs.lookupDirect("symbol").get)))),
+    ("t", OpType(returnType = Some(Refer(typeDefs.lookupDirect("symbol").get)))),
     ("block", OpType()),
     ("if", OpType()),
     ("while", OpType()),
@@ -115,188 +106,189 @@ object BuiltinScope extends Scope(parent = None) {
     ("set", OpType()),
     (
       "+",
-      FunType(List(ArrayType(PrimitiveType("number"))), PrimitiveType("number"))
+      FunType(List(ArrayType(Refer(typeDefs.lookupDirect("number").get))), Refer(typeDefs.lookupDirect("number").get))
     ),
     (
       "-",
-      FunType(List(ArrayType(PrimitiveType("number"))), PrimitiveType("number"))
+      FunType(List(ArrayType(Refer(typeDefs.lookupDirect("number").get))), Refer(typeDefs.lookupDirect("number").get))
     ),
     (
       "*",
-      FunType(List(ArrayType(PrimitiveType("number"))), PrimitiveType("number"))
+      FunType(List(ArrayType(Refer(typeDefs.lookupDirect("number").get))), Refer(typeDefs.lookupDirect("number").get))
     ),
     (
       "/",
-      FunType(List(ArrayType(PrimitiveType("number"))), PrimitiveType("number"))
+      FunType(List(ArrayType(Refer(typeDefs.lookupDirect("number").get))), Refer(typeDefs.lookupDirect("number").get))
     ),
     (
       "**",
       FunType(
-        List(PrimitiveType("number"), PrimitiveType("number")),
-        PrimitiveType("number")
+        List(Refer(typeDefs.lookupDirect("number").get), Refer(typeDefs.lookupDirect("number").get)),
+        Refer(typeDefs.lookupDirect("number").get)
       )
     ),
     (
       "is",
-      FunType(List(ArrayType(PrimitiveType("any"))), PrimitiveType("bool"))
+      FunType(List(ArrayType(Refer(typeDefs.lookupDirect("any").get))), Refer(typeDefs.lookupDirect("bool").get))
     ),
     (
       "=",
-      FunType(List(ArrayType(PrimitiveType("any"))), PrimitiveType("bool"))
+      FunType(List(ArrayType(Refer(typeDefs.lookupDirect("any").get))), Refer(typeDefs.lookupDirect("bool").get))
     ),
     (
       "!=",
-      FunType(List(ArrayType(PrimitiveType("any"))), PrimitiveType("bool"))
+      FunType(List(ArrayType(Refer(typeDefs.lookupDirect("any").get))), Refer(typeDefs.lookupDirect("bool").get))
     ),
     (
       ">",
-      FunType(List(ArrayType(PrimitiveType("number"))), PrimitiveType("bool"))
+      FunType(List(ArrayType(Refer(typeDefs.lookupDirect("number").get))), Refer(typeDefs.lookupDirect("bool").get))
     ),
     (
       "<",
-      FunType(List(ArrayType(PrimitiveType("number"))), PrimitiveType("bool"))
+      FunType(List(ArrayType(Refer(typeDefs.lookupDirect("number").get))), Refer(typeDefs.lookupDirect("bool").get))
     ),
     (
       ">=",
-      FunType(List(ArrayType(PrimitiveType("number"))), PrimitiveType("bool"))
+      FunType(List(ArrayType(Refer(typeDefs.lookupDirect("number").get))), Refer(typeDefs.lookupDirect("bool").get))
     ),
     (
       "<=",
-      FunType(List(ArrayType(PrimitiveType("number"))), PrimitiveType("bool"))
+      FunType(List(ArrayType(Refer(typeDefs.lookupDirect("number").get))), Refer(typeDefs.lookupDirect("bool").get))
     ),
     (
       ">>",
       FunType(
-        List(PrimitiveType("fixnum"), PrimitiveType("int32")),
-        PrimitiveType("fixnum")
+        List(Refer(typeDefs.lookupDirect("fixnum").get), Refer(typeDefs.lookupDirect("int32").get)),
+        Refer(typeDefs.lookupDirect("fixnum").get)
       )
     ),
     (
       "<<",
       FunType(
-        List(PrimitiveType("fixnum"), PrimitiveType("int32")),
-        PrimitiveType("fixnum")
+        List(Refer(typeDefs.lookupDirect("fixnum").get), Refer(typeDefs.lookupDirect("int32").get)),
+        Refer(typeDefs.lookupDirect("fixnum").get)
       )
     ),
     (
       "&",
       FunType(
-        List(ArrayType(PrimitiveType("fixnum"))),
-        PrimitiveType("fixnum")
+        List(ArrayType(Refer(typeDefs.lookupDirect("fixnum").get))),
+        Refer(typeDefs.lookupDirect("fixnum").get)
       )
     ),
     (
       "|",
       FunType(
-        List(ArrayType(PrimitiveType("fixnum"))),
-        PrimitiveType("fixnum")
+        List(ArrayType(Refer(typeDefs.lookupDirect("fixnum").get))),
+        Refer(typeDefs.lookupDirect("fixnum").get)
       )
     ),
     (
       "!",
       FunType(
-        List(PrimitiveType("fixnum")),
-        PrimitiveType("fixnum")
+        List(Refer(typeDefs.lookupDirect("fixnum").get)),
+        Refer(typeDefs.lookupDirect("fixnum").get)
       )
     ),
     (
       "^",
       FunType(
-        List(ArrayType(PrimitiveType("fixnum"))),
-        PrimitiveType("fixnum")
+        List(ArrayType(Refer(typeDefs.lookupDirect("fixnum").get))),
+        Refer(typeDefs.lookupDirect("fixnum").get)
       )
     ),
     (
       "and",
       OpType(
-        Some(List(ArrayType(PrimitiveType("bool")))),
-        Some(PrimitiveType("bool"))
+        Some(List(ArrayType(Refer(typeDefs.lookupDirect("bool").get)))),
+        Some(Refer(typeDefs.lookupDirect("bool").get))
       )
     ),
     (
       "or",
       OpType(
-        Some(List(ArrayType(PrimitiveType("bool")))),
-        Some(PrimitiveType("bool"))
+        Some(List(ArrayType(Refer(typeDefs.lookupDirect("bool").get)))),
+        Some(Refer(typeDefs.lookupDirect("bool").get))
       )
     ),
     (
       "not",
       OpType(
-        Some(List(PrimitiveType("bool"))),
-        Some(PrimitiveType("bool"))
+        Some(List(Refer(typeDefs.lookupDirect("bool").get))),
+        Some(Refer(typeDefs.lookupDirect("bool").get))
       )
     ),
     (
       "length",
-      FunType(List(ArrayType(PrimitiveType("any"))), PrimitiveType("uint"))
+      FunType(List(ArrayType(Refer(typeDefs.lookupDirect("any").get))), Refer(typeDefs.lookupDirect("uint").get))
     ),
     (
       "slice",
       FunType(
-        List(ArrayType(PrimitiveType("any"))),
-        ArrayType(PrimitiveType("any"))
+        List(ArrayType(Refer(typeDefs.lookupDirect("any").get))),
+        ArrayType(Refer(typeDefs.lookupDirect("any").get))
       )
     ),
     (
       "append",
       FunType(
-        List(ArrayType(PrimitiveType("any"))),
-        ArrayType(PrimitiveType("any"))
+        List(ArrayType(Refer(typeDefs.lookupDirect("any").get))),
+        ArrayType(Refer(typeDefs.lookupDirect("any").get))
       )
     ),
     (
       "concat",
       FunType(
-        List(ArrayType(PrimitiveType("any")), ArrayType(PrimitiveType("any"))),
-        ArrayType(PrimitiveType("any"))
+        List(ArrayType(Refer(typeDefs.lookupDirect("any").get)), ArrayType(Refer(typeDefs.lookupDirect("any").get))),
+        ArrayType(Refer(typeDefs.lookupDirect("any").get))
       )
     ),
     (
       "del",
       FunType(
-        List(ArrayType(PrimitiveType("any")), PrimitiveType("any")),
-        PrimitiveType("bool")
+        List(ArrayType(Refer(typeDefs.lookupDirect("any").get)), Refer(typeDefs.lookupDirect("any").get)),
+        Refer(typeDefs.lookupDirect("bool").get)
       )
     ),
     (
       "to",
       FunType(
-        List(PrimitiveType("any"), PrimitiveType("mexp")),
-        PrimitiveType("any")
+        List(Refer(typeDefs.lookupDirect("any").get), Refer(typeDefs.lookupDirect("mexp").get)),
+        Refer(typeDefs.lookupDirect("any").get)
       )
     ),
-    ("shallow-copy", FunType(List(PrimitiveType("any")), PrimitiveType("any"))),
-    ("copy", FunType(List(PrimitiveType("any")), PrimitiveType("any"))),
-    ("r", FunType(List(PrimitiveType("any")), PrimitiveType("any"))),
+    ("shallow-copy", FunType(List(Refer(typeDefs.lookupDirect("any").get)), Refer(typeDefs.lookupDirect("any").get))),
+    ("copy", FunType(List(Refer(typeDefs.lookupDirect("any").get)), Refer(typeDefs.lookupDirect("any").get))),
+    ("r", FunType(List(Refer(typeDefs.lookupDirect("any").get)), Refer(typeDefs.lookupDirect("any").get))),
     (
       "ffi",
-      FunType(List(ArrayType(PrimitiveType("any"))), PrimitiveType("any"))
+      FunType(List(ArrayType(Refer(typeDefs.lookupDirect("any").get))), Refer(typeDefs.lookupDirect("any").get))
     ),
     (
       "syscall",
-      FunType(List(ArrayType(PrimitiveType("any"))), PrimitiveType("any"))
+      FunType(List(ArrayType(Refer(typeDefs.lookupDirect("any").get))), Refer(typeDefs.lookupDirect("any").get))
     ),
+    ("new", OpType()),
     ("for", OpType()),
     ("cond", OpType()),
     (
       "++",
       FunType(
-        List(PrimitiveType("number")),
-        PrimitiveType("number")
+        List(Refer(typeDefs.lookupDirect("number").get)),
+        Refer(typeDefs.lookupDirect("number").get)
       )
     ),
     (
       "--",
       FunType(
-        List(PrimitiveType("number")),
-        PrimitiveType("number")
+        List(Refer(typeDefs.lookupDirect("number").get)),
+        Refer(typeDefs.lookupDirect("number").get)
       )
     )
   )
 
   def setBuiltinVar(name: String, t: TypeExp) =
-    setVar(name, new VarDef(name, t = t, typeExpanded = t))
+    setVar(name, new VarDef(name, t = t))
 
   builtinVars.map(s => setBuiltinVar(s._1, s._2))
 }

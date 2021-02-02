@@ -28,7 +28,7 @@ class QlySem(val ast: AST) {
         val ty = processType(t, scope)
         scope.setVar(
           variable,
-          new VarDef(variable, Some(mexp), ty, typeExpanded = expandType(ty, scope), scope = scope)
+          new VarDef(variable, Some(mexp), ty, scope = scope)
         )
       case CallExp(QlySymbol("f"), QlySymbol(fname) :: signature :: mexps) =>
         // f[fname signature mexps]
@@ -36,7 +36,7 @@ class QlySem(val ast: AST) {
           case ColonExp(QlyArray(params), returnType) => FunType(processParamTypes(params, scope), processType(returnType, scope))
           case QlyArray(params)                       => FunType(processParamTypes(params, scope), Untyped)
         }
-        scope.setVar(fname, new VarDef(fname, Some(mexp), t = t, typeExpanded = expandType(t, scope), scope = scope))
+        scope.setVar(fname, new VarDef(fname, Some(mexp), t = t, scope = scope))
       case CallExp(QlySymbol("t"), args) =>
         // t[...]
         args match {
@@ -46,7 +46,7 @@ class QlySem(val ast: AST) {
             if (d.isDefined) {
               throw TypeAlreadyDefinedInScope(d.get)
             }
-            val td = new TypeDef(t.value, Some(mexp), d = PrimitiveType(t.value), expanded = PrimitiveType(t.value), scope = scope)
+            val td = new TypeDef(t.value, Some(mexp), d = PrimitiveType(t.value), scope = scope)
             scope.setType(t, td)
           case (t: QlySymbol) :: typeDef :: Nil =>
             // t[type1 typeDef]
@@ -55,12 +55,12 @@ class QlySem(val ast: AST) {
               throw TypeAlreadyDefinedInScope(d.get)
             }
             val de = processType(typeDef, scope)
-            val td = new TypeDef(t.value, Some(mexp), d = de, expanded = expandType(de, scope), scope = scope)
+            val td = new TypeDef(t.value, Some(mexp), d = de, scope = scope)
             scope.setType(t, td)
           case ColonExp(t: QlySymbol, st: QlySymbol) :: Nil =>
             // t[type1:superType]
             if (scope.lookupType(t).isEmpty) {
-              scope.setType(t, new TypeDef(t.value, Some(mexp), d = PrimitiveType(t.value), expanded = PrimitiveType(t.value), scope = scope))
+              scope.setType(t, new TypeDef(t.value, Some(mexp), d = PrimitiveType(t.value), scope = scope))
             }
             val superType = scope.lookupType(st).getOrElse(throw UndefinedType(st))
             scope.lookupType(t).get.setSuper(superType)
@@ -71,7 +71,7 @@ class QlySem(val ast: AST) {
             }
             val de = processType(typeDef, scope)
             val superType = scope.lookupType(st).getOrElse(throw UndefinedType(st))
-            val td = new TypeDef(t.value, Some(mexp), d = de, expanded = expandType(de, scope), scope = scope)
+            val td = new TypeDef(t.value, Some(mexp), d = de, scope = scope)
             td.setSuper(superType)
             scope.setType(t, td)
           case _ => throw MalformedOp(mexp, "t should be t[type], t[type:supertype], t[type typedef] or t[type:supertype typedef]")
@@ -92,10 +92,14 @@ class QlySem(val ast: AST) {
     t match {
       case sym: QlySymbol =>
         val referTo = scope.lookupType(sym)
-        if (referTo.isEmpty) {
-          throw UndefinedType(sym)
-        } else {
-          Refer(to = referTo.get)
+        referTo match {
+          case None => throw UndefinedType(sym)
+          case Some(referTo) =>
+            if (referTo.scope == BuiltinScope) {
+              referTo.d
+            } else {
+              Refer(to = referTo)
+            }
         }
       case QlyArray(elems) =>
         if (elems.forall(elem => elem.getClass == classOf[ColonExp])) {
@@ -144,19 +148,6 @@ class QlySem(val ast: AST) {
     )
   }
 
-  def expandType(t: TypeExp, scope: Scope): TypeExp = {
-    t match {
-      case Untyped                     => Untyped
-      case p: PrimitiveType            => p
-      case FunType(params, r)          => FunType(params.map(p => expandType(p, scope)), expandType(r, scope))
-      case r: RangeType                => r
-      case ArrayType(e)                => ArrayType(expandType(e, scope))
-      case StructType(fields)          => StructType(fields.map(f => StructField(f.name, expandType(f.t, scope))))
-      case OpType(maybeParams, maybeR) => OpType(maybeParams.map(params => params.map(p => expandType(p, scope))), maybeR.map(r => expandType(r, scope)))
-      case Refer(to)                   => to.expanded
-    }
-  }
-
   def analyzeTypeMExpIn(mexp: MExp, scope: Scope) = {
     mexp match {
       case CallExp(QlySymbol("f"), List(fname: QlySymbol, signature, mexps)) => {
@@ -182,7 +173,7 @@ class QlySem(val ast: AST) {
         throw MalformedOp(param, "function param name should be symbol")
       }
       val name = t.asInstanceOf[QlySymbol].value
-      scope.setVar(name, new VarDef(name, Some(param), t = t, typeExpanded = expandType(t, scope), scope = scope))
+      scope.setVar(name, new VarDef(name, Some(param), t = t, scope = scope))
     })
   }
 
@@ -227,7 +218,7 @@ class QlySem(val ast: AST) {
     if (d.isDefined) {
       symbolScopes(symbol) = scope
       d.get.occurs.add(symbol)
-      d.get.typeExpanded
+      d.get.t
     } else {
       throw UndefinedVariable(symbol)
     }
