@@ -1,10 +1,9 @@
-class A()
-class B() extends A
-val b = List(new B())
-b.head.getClass == classOf[A]
-b.head.getClass == classOf[B]
+import scala.collection.mutable
 
-val f = (b: Seq[A]) => {
-  b.head
-}
-f(b)
+val a = mutable.DoubleLinkedList(3, 4, 5)
+
+a.next.head
+
+val b = List(3,4,5)
+b.next
+

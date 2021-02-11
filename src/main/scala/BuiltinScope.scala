@@ -6,6 +6,7 @@ object BuiltinScope extends Scope(parent = None) {
   }
 
   val types = Vector(
+    "nothing",
     "nil",
     "any",
     "symbol",
@@ -53,7 +54,7 @@ object BuiltinScope extends Scope(parent = None) {
     )
   )
 
-  val stringTypeExp = ArrayType(PrimitiveType("char"))
+  val stringTypeExp = ArrayType(Refer(typeDefs.lookupDirect("char").get))
   setType(
     "string",
     new TypeDef("string", d = Some(stringTypeExp))
@@ -92,16 +93,17 @@ object BuiltinScope extends Scope(parent = None) {
   superTypes.map(s => setBuiltinSuperType(s._1, s._2))
 
   val builtinVars: Vector[(String, TypeExp)] = Vector(
+    ("nil", Refer(typeDefs.lookupDirect("nil").get)))
     ("true", Refer(typeDefs.lookupDirect("bool").get)),
     ("false", Refer(typeDefs.lookupDirect("bool").get)),
     ("v", OpType(returnType = Some(Refer(typeDefs.lookupDirect("symbol").get)))),
     ("f", OpType(returnType = Some(Refer(typeDefs.lookupDirect("symbol").get)))),
     ("t", OpType(returnType = Some(Refer(typeDefs.lookupDirect("symbol").get)))),
-    ("block", OpType()),
+    ("b", OpType()),
     ("if", OpType()),
-    ("while", OpType()),
-    ("continue", OpType()),
-    ("break", OpType()),
+    ("new", OpType()),
+    ("tag", OpType()),
+    ("goto", OpType()),
     ("return", OpType()),
     ("set", OpType()),
     (
@@ -268,7 +270,9 @@ object BuiltinScope extends Scope(parent = None) {
       "syscall",
       FunType(List(ArrayType(Refer(typeDefs.lookupDirect("any").get))), Refer(typeDefs.lookupDirect("any").get))
     ),
-    ("new", OpType()),
+    ("while", OpType()),
+    ("continue", OpType()),
+    ("break", OpType()),
     ("for", OpType()),
     ("cond", OpType()),
     (

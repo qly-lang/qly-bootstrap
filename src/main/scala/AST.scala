@@ -1,11 +1,12 @@
-import java.nio.file.Path
-import scala.util.parsing.input.Positional
+import scala.util.parsing.input.{Position, Positional}
 
 class AST(val mexps: List[MExp]) {
   override def toString: String = mexps.mkString("(", " ", ")")
 }
 
 sealed trait MExp extends Positional
+
+case class ASTPosition(override var pos: Position) extends Positional
 
 case class DotExp(value: MExp, dot: MExp) extends MExp {
   override def toString: String = "(. " + value.toString + " " + dot.toString + ")"
@@ -61,6 +62,7 @@ sealed trait QlyUInt extends Atom {
     }
   }
 }
+
 case class QlySymbol(value: String) extends Atom {
   def unescapeSymbol(v: String): String = {
     val r = v

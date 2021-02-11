@@ -2,31 +2,30 @@ import java.nio.file.Path
 import scala.util.parsing.combinator.{PackratParsers, RegexParsers}
 import scala.util.parsing.input.{CharSequenceReader, Reader}
 
-case class QlySyntaxError(location: Location, msg: String)
-    extends QlyCompilationError
+case class SyntaxError(location: Location, msg: String) extends CompilationError
 
 case class Location(line: Int, column: Int) {
   override def toString = s"line: $line, column: $column"
 }
 
-object QlyParser extends RegexParsers with PackratParsers {
+object Parser extends RegexParsers with PackratParsers {
   override def skipWhitespace: Boolean = false
 
   // TODO: human understandable error message
-  @throws(classOf[QlySyntaxError])
+  @throws(classOf[SyntaxError])
   def apply(code: String): AST = {
     val reader = new PackratReader(new CharSequenceReader(code))
     phrase(mexps)(reader) match {
       case NoSuccess(msg, next) => {
         println(next.pos)
         println(msg)
-        throw QlySyntaxError(Location(next.pos.line, next.pos.column), msg)
+        throw SyntaxError(Location(next.pos.line, next.pos.column), msg)
       }
       case Success(result, next) => new AST(result)
     }
   }
 
-  @throws(classOf[QlySyntaxError])
+  @throws(classOf[SyntaxError])
   def apply(path: Path): AST = {
     val file = scala.io.Source.fromFile(path.toString)
     val result = apply(file.mkString)
@@ -148,22 +147,21 @@ object QlyParser extends RegexParsers with PackratParsers {
 
   def qlyUInt: Parser[QlyUInt] =
     positioned {
-      """(0x[0-9a-f]+)|(0o[0-7]+)|(0b[01]+)""".r <~ guard(not(symbolChar)) ^^ {
-        s =>
-          {
-            val b = s.drop(1).head
-            val base = if (b == 'x') 16 else if (b == 'o') 8 else 2
-            val u = BigInt(s.drop(2), base)
-            if (u < BigInt(2).pow(32)) {
-              QlyUInt32(u, base)
-            } else if (u < BigInt(2).pow(64)) {
-              QlyUInt64(u, base)
-            } else if (u < BigInt(2).pow(128)) {
-              QlyUInt128(u, base)
-            } else {
-              QlyBigUInt(u, base)
-            }
+      """(0x[0-9a-f]+)|(0o[0-7]+)|(0b[01]+)""".r <~ guard(not(symbolChar)) ^^ { s =>
+        {
+          val b = s.drop(1).head
+          val base = if (b == 'x') 16 else if (b == 'o') 8 else 2
+          val u = BigInt(s.drop(2), base)
+          if (u < BigInt(2).pow(32)) {
+            QlyUInt32(u, base)
+          } else if (u < BigInt(2).pow(64)) {
+            QlyUInt64(u, base)
+          } else if (u < BigInt(2).pow(128)) {
+            QlyUInt128(u, base)
+          } else {
+            QlyBigUInt(u, base)
           }
+        }
       }
     }
 
