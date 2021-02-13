@@ -1,8 +1,15 @@
 import scala.collection.mutable
+import scala.util.{Failure, Success, Try}
 
 class TypeAnalyzer(val ast: AST) {
   val rootScope = new Scope()
   val scopes: mutable.Map[MExp, Scope] = mutable.Map[MExp, Scope]()
+  val errors: mutable.ArrayBuffer[SemErrorExp] = mutable.ArrayBuffer()
+
+  def semError(error: SemanticError, mexp: MExp): ErrorType.type = {
+    errors.append(SemErrorExp(error, mexp))
+    ErrorType
+  }
 
   def analyze = {
     analyzeTypeMExps(ast.mexps, rootScope)
@@ -68,7 +75,7 @@ class TypeAnalyzer(val ast: AST) {
             val td = new TypeDef(t.value, Some(mexp), d = Some(de), scope = scope)
             td.setSuper(superType)
             scope.setType(t, td)
-          case _ => throw MalformedOp(mexp, "t should be t[type], t[type:supertype], t[type typedef] or t[type:supertype typedef]")
+          case _ => semError(MalformedOp("t should be t[type], t[type:supertype], t[type typedef] or t[type:supertype typedef]"), mexp)
         }
     }
   }
@@ -76,9 +83,10 @@ class TypeAnalyzer(val ast: AST) {
   def processParamTypes(params: List[MExp], scope: Scope): List[TypeExp] = {
     params.map(param => {
       if (param.getClass != classOf[ColonExp]) {
-        throw MalformedOp(param, "expect param:type in param lists")
+        semError(MalformedOp("expect param:type in param lists"), param)
+      } else {
+        processType(param.asInstanceOf[ColonExp].col, scope)
       }
-      processType(param.asInstanceOf[ColonExp].col, scope)
     })
   }
 
@@ -86,51 +94,66 @@ class TypeAnalyzer(val ast: AST) {
     t match {
       case sym: QlySymbol =>
         val referTo = scope.lookupType(sym)
-        Refer(to = referTo.getOrElse(UndefinedType(sym)))
+        referTo match {
+          case Some(to) => Refer(to)
+          case None     => semError(UndefinedType(sym), sym)
+        }
       case QlyArray(elems) =>
         if (elems.forall(elem => elem.getClass == classOf[ColonExp])) {
-          StructType(
-            elems.map(elem => processFieldType(elem.asInstanceOf[ColonExp], scope))
-          )
+          val fields = elems.map(arg => processFieldType(arg.asInstanceOf[ColonExp], scope))
+          try {
+            StructType(fields.map(_.get))
+          } catch {
+            case _ => semError(MalformedType("Some struct field malformed"), t)
+          }
         } else if (elems.length == 1) {
           ArrayType(processType(elems.head, scope))
         } else {
-          throw MalformedType(
-            t,
-            "Pattern in [] need to be either a type of a list of field:type"
+          semError(
+            MalformedType(
+              "Pattern in [] need to be either a type of a list of field:type"
+            ),
+            t
           )
         }
       case CallExp(QlySymbol("array"), args) =>
         if (args.length != 1) {
-          throw MalformedType(
-            t,
-            "there should be one and only one type indicate as array element"
+          return semError(
+            MalformedType(
+              "there should be one and only one type indicate as array element"
+            ),
+            t
           )
         }
         ArrayType(processType(args.head, scope))
       case CallExp(QlySymbol("struct"), args) =>
         if (args.exists(elem => elem.getClass != classOf[ColonExp])) {
-          throw MalformedType(t, "struct[] fields should be colon exps")
+          return semError(MalformedType("struct[] fields should be colon exps"), t)
         }
-        StructType(
-          args.map(arg => processFieldType(arg.asInstanceOf[ColonExp], scope))
-        )
+        val fields = args.map(arg => processFieldType(arg.asInstanceOf[ColonExp], scope))
+        try {
+          StructType(fields.map(_.get))
+        } catch {
+          case _ => semError(MalformedType("Some struct field malformed"), t)
+        }
       case CallExp(QlySymbol("f"), List(ColonExp(QlyArray(types), returnType))) =>
         FunType(
           types.map(t => processType(t, scope)),
           processType(returnType, scope)
         )
-      case _ => throw MalformedType(t, "Unknown pattern of type")
+      case _ => semError(MalformedType("Unknown pattern of type"), t)
     }
   }
 
-  def processFieldType(colonExp: ColonExp, scope: Scope): StructField = {
+  def processFieldType(colonExp: ColonExp, scope: Scope): Try[StructField] = {
     if (colonExp.value.getClass != classOf[QlySymbol]) {
-      throw MalformedType(colonExp, "Struct field name need to be symbol")
+      Failure(semError(MalformedType("Struct field name need to be symbol"), colonExp))
     }
-    StructField(
-      colonExp.value.asInstanceOf[QlySymbol].value,
-      processType(colonExp.col, scope)
+    Success(
+      StructField(
+        colonExp.value.asInstanceOf[QlySymbol].value,
+        processType(colonExp.col, scope)
+      )
     )
   }
 
@@ -142,7 +165,7 @@ class TypeAnalyzer(val ast: AST) {
         signature match {
           case ColonExp(QlyArray(params), _) => processParamVars(params, newScope)
           case QlyArray(params)              => processParamVars(params, newScope)
-          case _                             => throw MalformedOp(mexp, "Function signature should be either [param:type ...] or [param:type ...]:return-type")
+          case _                             => semError(MalformedOp("Function signature should be either [param:type ...] or [param:type ...]:return-type"), mexp)
         }
       }
     }
@@ -151,15 +174,17 @@ class TypeAnalyzer(val ast: AST) {
   def processParamVars(params: List[MExp], scope: Scope) = {
     params.foreach(param => {
       if (param.getClass != classOf[ColonExp]) {
-        throw MalformedOp(param, "function param should be colon exp")
+        semError(MalformedOp("function param should be colon exp"), param)
+      } else {
+        val colonExp = param.asInstanceOf[ColonExp];
+        val t = processType(colonExp.col, scope)
+        if (colonExp.value.getClass != classOf[QlySymbol]) {
+          semError(MalformedOp("function param name should be symbol"), param)
+        } else {
+          val name = t.asInstanceOf[QlySymbol].value
+          scope.setVar(name, new VarDef(name, Some(param), t = t, scope = scope))
+        }
       }
-      val colonExp = param.asInstanceOf[ColonExp];
-      val t = processType(colonExp.col, scope)
-      if (colonExp.value.getClass != classOf[QlySymbol]) {
-        throw MalformedOp(param, "function param name should be symbol")
-      }
-      val name = t.asInstanceOf[QlySymbol].value
-      scope.setVar(name, new VarDef(name, Some(param), t = t, scope = scope))
     })
   }
 }

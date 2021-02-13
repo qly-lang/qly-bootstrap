@@ -93,7 +93,7 @@ object BuiltinScope extends Scope(parent = None) {
   superTypes.map(s => setBuiltinSuperType(s._1, s._2))
 
   val builtinVars: Vector[(String, TypeExp)] = Vector(
-    ("nil", Refer(typeDefs.lookupDirect("nil").get)))
+    ("nil", Refer(typeDefs.lookupDirect("nil").get)),
     ("true", Refer(typeDefs.lookupDirect("bool").get)),
     ("false", Refer(typeDefs.lookupDirect("bool").get)),
     ("v", OpType(returnType = Some(Refer(typeDefs.lookupDirect("symbol").get)))),

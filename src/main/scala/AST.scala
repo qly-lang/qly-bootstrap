@@ -6,7 +6,9 @@ class AST(val mexps: List[MExp]) {
 
 sealed trait MExp extends Positional
 
-case class ASTPosition(override var pos: Position) extends Positional
+case class ASTPosition(position: Position) extends Positional {
+  pos = position
+}
 
 case class DotExp(value: MExp, dot: MExp) extends MExp {
   override def toString: String = "(. " + value.toString + " " + dot.toString + ")"

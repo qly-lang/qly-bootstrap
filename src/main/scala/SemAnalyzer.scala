@@ -2,15 +2,16 @@ import scala.collection.mutable
 
 class SemAnalyzer(val ast: AST, val symbolTable: SymbolTable) {
   val symbolScopes: mutable.Map[QlySymbol, Scope] = mutable.Map[QlySymbol, Scope]()
-  var errors = 0
+  var errors: mutable.ArrayBuffer[SemErrorExp] = mutable.ArrayBuffer()
 
   def analyze: SemTree = {
     new SemTree(ast.mexps.map(m => analyzeMExp(m, symbolTable.rootScope)).toVector, BuiltinScope)
   }
 
   def semError(error: SemanticError, mexp: MExp): SemErrorExp = {
-    errors += 1
-    SemErrorExp(error, mexp)
+    val semError = SemErrorExp(error, mexp)
+    errors += semError
+    semError
   }
 
   def analyzeMExp(mexp: MExp, scope: Scope): SemExp = {
@@ -144,5 +145,5 @@ class SemAnalyzer(val ast: AST, val symbolTable: SymbolTable) {
     }
   }
 
-  def analyzeBuiltinOp(op: CallExp, scope: Scope): SemExp = {}
+  def analyzeBuiltinOp(op: CallExp, scope: Scope): SemExp = ???
 }

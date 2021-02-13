@@ -88,7 +88,7 @@ case class OpType(
 }
 case class ExactType(value: MExp)
 case object Untyped extends TypeExp
-case object ErrorType extends TypeExp
+case object ErrorType extends Throwable with TypeExp
 case class Refer(to: TypeDef) extends TypeExp {
   override def isSuper(other: TypeExp): Boolean = {
     if (this == other) return false
