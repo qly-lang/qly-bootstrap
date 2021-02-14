@@ -16,12 +16,12 @@ class TypeAnalyzer(val ast: AST) {
     new TypeAnalyzeResult(new SymbolTable(rootScope, scopes.toMap), errors.toVector)
   }
 
-  def analyzeTypeMExps(mexps: Seq[MExp], scope: Scope) = {
+  def analyzeTypeMExps(mexps: Seq[MExp], scope: Scope): Unit = {
     mexps.foreach(analyzeTypeMExpOut(_, scope))
     mexps.foreach(analyzeTypeMExpIn(_, scope))
   }
 
-  def analyzeTypeMExpOut(mexp: MExp, scope: Scope) = {
+  def analyzeTypeMExpOut(mexp: MExp, scope: Scope): Unit = {
     mexp match {
       case CallExp(QlySymbol("v"), ColonExp(QlySymbol(variable), t) :: _) =>
         // v[variable : t _]
@@ -62,7 +62,12 @@ class TypeAnalyzer(val ast: AST) {
             if (scope.lookupType(t).isEmpty) {
               scope.setType(t, new TypeDef(t.value, Some(mexp), scope = scope))
             }
-            val superType = scope.lookupType(st).getOrElse(throw UndefinedType(st))
+            val superType = scope
+              .lookupType(st)
+              .getOrElse({
+                semError(UndefinedType(st), st)
+                return
+              })
             scope.lookupType(t).get.setSuper(superType)
           case ColonExp(t: QlySymbol, st: QlySymbol) :: typeDef :: Nil =>
             // t[type1:superType typeDef]
@@ -71,7 +76,12 @@ class TypeAnalyzer(val ast: AST) {
               throw TypeAlreadyDefinedInScope(d.get)
             }
             val de = processType(typeDef, scope)
-            val superType = scope.lookupType(st).getOrElse(throw UndefinedType(st))
+            val superType = scope
+              .lookupType(st)
+              .getOrElse({
+                semError(UndefinedType(st), st)
+                return
+              })
             val td = new TypeDef(t.value, Some(mexp), d = Some(de), scope = scope)
             td.setSuper(superType)
             scope.setType(t, td)
@@ -162,7 +172,7 @@ class TypeAnalyzer(val ast: AST) {
 
   def analyzeTypeMExpIn(mexp: MExp, scope: Scope) = {
     mexp match {
-      case CallExp(QlySymbol("f"), (fname: QlySymbol) :: signature :: _) => {
+      case CallExp(QlySymbol("f"), (fname: QlySymbol) :: signature :: mexps) => {
         val newScope = new Scope(Some(scope), Some(mexp))
         scopes(mexp) = newScope
         signature match {
@@ -170,6 +180,7 @@ class TypeAnalyzer(val ast: AST) {
           case QlyArray(params)              => processParamVars(params, newScope)
           case _                             => semError(MalformedOp("Function signature should be either [param:type ...] or [param:type ...]:return-type"), mexp)
         }
+        analyzeTypeMExps(mexps, newScope)
       }
       case _ => {}
     }
