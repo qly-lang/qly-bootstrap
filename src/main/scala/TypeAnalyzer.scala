@@ -13,7 +13,7 @@ class TypeAnalyzer(val ast: AST) {
 
   def analyze = {
     analyzeTypeMExps(ast.mexps, rootScope)
-    new SymbolTable(rootScope, scopes.toMap)
+    new TypeAnalyzeResult(new SymbolTable(rootScope, scopes.toMap), errors.toVector)
   }
 
   def analyzeTypeMExps(mexps: Seq[MExp], scope: Scope) = {
@@ -23,7 +23,7 @@ class TypeAnalyzer(val ast: AST) {
 
   def analyzeTypeMExpOut(mexp: MExp, scope: Scope) = {
     mexp match {
-      case CallExp(QlySymbol("v"), List(ColonExp(QlySymbol(variable), t), _)) =>
+      case CallExp(QlySymbol("v"), ColonExp(QlySymbol(variable), t) :: _) =>
         // v[variable : t _]
         val ty = processType(t, scope)
         scope.setVar(
@@ -77,15 +77,18 @@ class TypeAnalyzer(val ast: AST) {
             scope.setType(t, td)
           case _ => semError(MalformedOp("t should be t[type], t[type:supertype], t[type typedef] or t[type:supertype typedef]"), mexp)
         }
+      case _ => {}
     }
   }
 
   def processParamTypes(params: List[MExp], scope: Scope): List[TypeExp] = {
     params.map(param => {
-      if (param.getClass != classOf[ColonExp]) {
-        semError(MalformedOp("expect param:type in param lists"), param)
-      } else {
+      if (param.getClass == classOf[ColonExp]) {
         processType(param.asInstanceOf[ColonExp].col, scope)
+      } else if (param.getClass == classOf[QlySymbol]) {
+        Untyped
+      } else {
+        semError(MalformedOp("expect param or param:type in param lists"), param)
       }
     })
   }
@@ -159,7 +162,7 @@ class TypeAnalyzer(val ast: AST) {
 
   def analyzeTypeMExpIn(mexp: MExp, scope: Scope) = {
     mexp match {
-      case CallExp(QlySymbol("f"), List(fname: QlySymbol, signature, mexps)) => {
+      case CallExp(QlySymbol("f"), (fname: QlySymbol) :: signature :: _) => {
         val newScope = new Scope(Some(scope), Some(mexp))
         scopes(mexp) = newScope
         signature match {
@@ -168,25 +171,31 @@ class TypeAnalyzer(val ast: AST) {
           case _                             => semError(MalformedOp("Function signature should be either [param:type ...] or [param:type ...]:return-type"), mexp)
         }
       }
+      case _ => {}
     }
   }
 
   def processParamVars(params: List[MExp], scope: Scope) = {
     params.foreach(param => {
-      if (param.getClass != classOf[ColonExp]) {
-        semError(MalformedOp("function param should be colon exp"), param)
-      } else {
+      if (param.getClass == classOf[ColonExp]) {
         val colonExp = param.asInstanceOf[ColonExp];
         val t = processType(colonExp.col, scope)
         if (colonExp.value.getClass != classOf[QlySymbol]) {
           semError(MalformedOp("function param name should be symbol"), param)
         } else {
-          val name = t.asInstanceOf[QlySymbol].value
+          val name = colonExp.value.asInstanceOf[QlySymbol].value
           scope.setVar(name, new VarDef(name, Some(param), t = t, scope = scope))
         }
+      } else if (param.getClass == classOf[QlySymbol]) {
+        val sym = param.asInstanceOf[QlySymbol]
+        scope.setVar(sym.value, new VarDef(sym.value, Some(param), t = Untyped, scope = scope))
+      } else {
+        semError(MalformedOp("function param should be symbol or colon exp"), param)
       }
     })
   }
 }
 
 class SymbolTable(val rootScope: Scope, val scopes: Map[MExp, Scope])
+
+class TypeAnalyzeResult(val symbolTable: SymbolTable, val errors: Vector[SemErrorExp])
