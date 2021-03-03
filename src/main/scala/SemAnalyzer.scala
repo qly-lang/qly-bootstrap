@@ -145,5 +145,57 @@ class SemAnalyzer(val ast: AST, val symbolTable: SymbolTable) {
     }
   }
 
-  def analyzeBuiltinOp(op: CallExp, scope: Scope): SemExp = ???
+  def analyzeFunDef(mexp: MExp, fname: QlySymbol, value: List[MExp], scope: Scope): FunOp = {
+    val funType = scope.lookupType(fname).get.d.get.asInstanceOf[FunType]
+    val params = value.head match {
+      case ColonExp(v: QlyArray, _) => v
+      case v: QlyArray              => v
+    }
+    val paramNames = params.value.map {
+      case QlySymbol(n)              => SymbolValue(n)
+      case ColonExp(QlySymbol(n), _) => SymbolValue(n)
+    }
+    val body = value.drop(1)
+    val funScope = symbolTable.scopes(mexp)
+    val semTree = new SemTree(body.map(m => analyzeMExp(m, funScope)).toVector, funScope)
+    FunOp(mexp, funType, paramNames, semTree)
+  }
+
+  def analyzeBuiltinOp(op: CallExp, scope: Scope): SemExp = {
+    op.value.asInstanceOf[QlySymbol].value match {
+      case "t" =>
+        val name = op.args.head match {
+          case QlySymbol(n)              => n
+          case ColonExp(QlySymbol(n), _) => n
+        }
+        val d = scope.varDefs.lookup(name).get
+        DefOp(
+          op,
+          d,
+          if (op.args.length == 2) { Some(analyzeMExp(op.args(1), scope)) }
+          else None
+        )
+      case "f" =>
+        val first = op.args.head
+        val name = first match {
+          case QlySymbol(n) => n
+          case _            => ??? // Don't consider lambda for now
+        }
+        val funDef = analyzeFunDef(op, op.args.head.asInstanceOf[QlySymbol], op.args.drop(1), scope)
+        val d = scope.varDefs.lookup(name).get
+        DefOp(op, d, Some(funDef))
+      case "t" => NoOp(op)
+      case "b" => BlockOp(op, op.args.map(mexp => analyzeMExp(mexp, scope)).toVector)
+      case "if" =>
+        op.args match {
+          case cond :: thenPart :: Nil             => IfOp(op, analyzeMExp(cond, scope), analyzeMExp(thenPart, scope), None)
+          case cond :: thenPart :: elsePart :: Nil => IfOp(op, analyzeMExp(cond, scope), analyzeMExp(thenPart, scope), Some(analyzeMExp(elsePart, scope)))
+          case _                                   => semError(MalformedOp("if should be if[condition then else] or if[condition then] form"), op)
+        }
+//      case "new" => op.args match {
+//        case t :: v :: Nil =>
+//          val ty =
+//      }
+    }
+  }
 }

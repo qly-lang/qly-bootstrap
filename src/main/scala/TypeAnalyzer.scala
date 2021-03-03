@@ -87,7 +87,112 @@ class TypeAnalyzer(val ast: AST) {
             scope.setType(t, td)
           case _ => semError(MalformedOp("t should be t[type], t[type:supertype], t[type typedef] or t[type:supertype typedef]"), mexp)
         }
-      case _ => {}
+      case CallExp(QlySymbol("b"), args)  => analyzeTypeMExps(args, scope)
+      case CallExp(QlySymbol("if"), args) => analyzeTypeMExps(args, scope)
+      case CallExp(QlySymbol("new"), t :: args) =>
+        if (args.length != 1) {
+          semError(MalformedOp("new should be in new[type exp] form"), mexp)
+        } else {
+          val typeExp = processType(t, scope)
+          scope.mexpTypeExp(mexp) = typeExp
+          analyzeTypeMExps(args, scope)
+        }
+      case CallExp(QlySymbol("tag"), args) =>
+        if (args.length != 1 || !args.head.isInstanceOf[QlySymbol]) {
+          semError(MalformedOp("tag should be in tag[name] form, and name should be a symbol"), mexp)
+        }
+      case CallExp(QlySymbol("goto"), args) =>
+        if (args.length != 1 || !args.head.isInstanceOf[QlySymbol]) {
+          semError(MalformedOp("goto should be in goto[name] form, and name should be a symbol"), mexp)
+        }
+      case CallExp(QlySymbol("return"), args) =>
+        if (args.length > 1) {
+          semError(MalformedOp("return should take at most one arg"), mexp)
+        } else if (args.length == 1) {
+          analyzeTypeMExps(args, scope)
+        }
+      case CallExp(QlySymbol("set"), args) =>
+        if (args.length != 2) {
+          semError(MalformedOp("set should in form set[location value]"), mexp)
+        } else {
+          // TODO: consider how to deal with location, in sem pass?
+          analyzeTypeMExps(args.drop(1), scope)
+        }
+      case CallExp(QlySymbol("and"), args) =>
+        analyzeTypeMExps(args, scope)
+      case CallExp(QlySymbol("or"), args) =>
+        analyzeTypeMExps(args, scope)
+      case CallExp(QlySymbol("to"), t :: args) =>
+        if (args.length != 1) {
+          semError(MalformedOp("to should be in to[type exp] form"), mexp)
+        } else {
+          val typeExp = processType(t, scope)
+          scope.mexpTypeExp(mexp) = typeExp
+          analyzeTypeMExps(args, scope)
+        }
+      case CallExp(QlySymbol("while"), args) =>
+        analyzeTypeMExps(args, scope)
+      // do not consider for & cond for now, they might be implemented as macro. and for for, it also depends on iterator gf
+//      case CallExp(QlySymbol("for"), args) => {}
+      case CallExp(QlySymbol("continue"), args) =>
+        if (args.length > 1) {
+          semError(MalformedOp("continue should take at most one arg"), mexp)
+        } else {
+          analyzeTypeMExps(args, scope)
+        }
+      case CallExp(QlySymbol("break"), args) =>
+        if (args.length > 1) {
+          semError(MalformedOp("break should take at most one arg"), mexp)
+        } else {
+          analyzeTypeMExps(args, scope)
+        }
+      case CallExp(QlySymbol(_), args) =>
+        analyzeTypeMExps(args, scope)
+      case CallExp(mexp, args) =>
+        analyzeTypeMExps(Seq(mexp), scope)
+        analyzeTypeMExps(args, scope)
+      case DotExp(value, dot) =>
+        analyzeTypeMExps(Seq(value), scope)
+        analyzeTypeMExps(Seq(dot), scope)
+      case QlyArray(args) =>
+        analyzeTypeMExps(args, scope)
+      case _: Atom       => ()
+      case QuoteExp(v)   => analyzeTypeInQuote(v, scope, 1)
+      case _: UnquoteExp => semError(MalformedExp("UnquoteExp out of quote"), mexp)
+      case _: SpliceExp  => semError(MalformedOp("SpliceExp out of quote"), mexp)
+      case _: ColonExp   => semError(MalformedExp("ColonExp cannot appear here"), mexp)
+    }
+  }
+
+  def analyzeTypeInQuote(mexp: MExp, scope: Scope, quoteDepth: Int): Unit = {
+    mexp match {
+      case CallExp(v, as) =>
+        analyzeTypeInQuote(v, scope, quoteDepth)
+        as.foreach(a => analyzeTypeInQuote(a, scope, quoteDepth))
+      case DotExp(v, d) =>
+        analyzeTypeInQuote(v, scope, quoteDepth)
+        analyzeTypeInQuote(d, scope, quoteDepth)
+      case QlyArray(vs) =>
+        vs.foreach(v => analyzeTypeInQuote(v, scope, quoteDepth))
+      case _: Atom => ()
+      case ColonExp(v, c) =>
+        analyzeTypeInQuote(v, scope, quoteDepth)
+        analyzeTypeInQuote(c, scope, quoteDepth)
+      case QuoteExp(v) => analyzeTypeInQuote(v, scope, quoteDepth + 1)
+      case UnquoteExp(v) =>
+        val newDepth = quoteDepth - 1
+        if (newDepth == 0) {
+          analyzeTypeMExps(Seq(v), scope)
+        } else {
+          analyzeTypeInQuote(v, scope, newDepth)
+        }
+      case SpliceExp(v) =>
+        val newDepth = quoteDepth - 1
+        if (newDepth == 0) {
+          analyzeTypeMExps(Seq(v), scope)
+        } else {
+          analyzeTypeInQuote(v, scope, newDepth)
+        }
     }
   }
 

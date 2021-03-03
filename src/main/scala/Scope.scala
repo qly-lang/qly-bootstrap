@@ -10,6 +10,11 @@ class Scope(
   val typeDefs: EnvChain[String, TypeDef] = new EnvChain(
     parent.map(parent => parent.typeDefs)
   )
+  // Lambda doesn't have a name, map entire mexp to corresponding FunType
+  val lambdaTypes: mutable.Map[MExp, FunType] = mutable.Map()
+  // In new[type exp] and to[type exp], map the MExp "type" to analyzed TypeExp
+  val mexpTypeExp: mutable.Map[MExp, TypeExp] = mutable.Map()
+
   def lookupVar(sym: QlySymbol): Option[VarDef] =
     lookupVarDirect(sym).orElse(parent match {
       case Some(scope) => scope.lookupVar(sym)

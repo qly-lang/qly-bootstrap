@@ -66,7 +66,7 @@ case class ArrayAccess(pos: CallExp, a: SemExp, idx: SemExp) extends SemExp {
 case class StructFieldAccess(pos: MExp, a: SemExp, field: SymbolValue) extends SemExp {
   override val t: TypeExp = a.t.asInstanceOf[StructType].fields.find(fi => fi.name == field.value).get.t
 }
-case class ifOp(pos: MExp, condition: SemExp, thenClause: SemExp, elseClause: Option[SemExp]) extends SemExp {
+case class IfOp(pos: MExp, condition: SemExp, thenClause: SemExp, elseClause: Option[SemExp]) extends SemExp {
   override val t: TypeExp = elseClause match {
     case Some(s) => s.t.commonType(thenClause.t)
     case None    => Refer(BuiltinScope.typeDefs.lookupDirect("nil").get).commonType(thenClause.t)
@@ -87,10 +87,13 @@ case class NewOp(pos: MExp, t: TypeExp, v: SemExp) extends SemExp
 case class ReturnOp(pos: MExp, v: Option[SemExp]) extends SemExp {
   override val t: TypeExp = if (v.isEmpty) Refer(BuiltinScope.typeDefs.lookupDirect("nil").get) else v.get.t
 }
-case class DefOp(pos: MExp, varDef: VarDef, v: SemExp) extends SemExp {
+case class DefOp(pos: MExp, varDef: VarDef, v: Option[SemExp]) extends SemExp {
   override val t: TypeExp = Refer(BuiltinScope.typeDefs.lookupDirect("nil").get)
 }
 case class SetOp(pos: MExp, varDef: VarDef, v: SemExp) extends SemExp {
   override val t: TypeExp = Refer(BuiltinScope.typeDefs.lookupDirect("nil").get)
 }
 case class FunOp(pos: MExp, t: FunType, paramNames: Seq[SymbolValue], body: SemTree) extends SemExp
+case class NoOp(pos: MExp) extends SemExp {
+  override val t: TypeExp = Refer(BuiltinScope.typeDefs.lookupDirect("nil").get)
+}

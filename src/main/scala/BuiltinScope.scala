@@ -107,6 +107,32 @@ object BuiltinScope extends Scope(parent = None) {
     ("return", OpType()),
     ("set", OpType()),
     (
+      "and",
+      OpType(
+        Some(List(ArrayType(Refer(typeDefs.lookupDirect("bool").get)))),
+        Some(Refer(typeDefs.lookupDirect("bool").get))
+      )
+    ),
+    (
+      "or",
+      OpType(
+        Some(List(ArrayType(Refer(typeDefs.lookupDirect("bool").get)))),
+        Some(Refer(typeDefs.lookupDirect("bool").get))
+      )
+    ),
+    (
+      "to",
+      OpType(
+        Some(List(Refer(typeDefs.lookupDirect("any").get), Refer(typeDefs.lookupDirect("mexp").get))),
+        Some(Refer(typeDefs.lookupDirect("any").get))
+      )
+    ),
+    ("while", OpType()),
+    ("continue", OpType()),
+    ("break", OpType()),
+    ("for", OpType()),
+    ("cond", OpType()),
+    (
       "+",
       FunType(List(ArrayType(Refer(typeDefs.lookupDirect("number").get))), Refer(typeDefs.lookupDirect("number").get))
     ),
@@ -200,24 +226,10 @@ object BuiltinScope extends Scope(parent = None) {
       )
     ),
     (
-      "and",
-      OpType(
-        Some(List(ArrayType(Refer(typeDefs.lookupDirect("bool").get)))),
-        Some(Refer(typeDefs.lookupDirect("bool").get))
-      )
-    ),
-    (
-      "or",
-      OpType(
-        Some(List(ArrayType(Refer(typeDefs.lookupDirect("bool").get)))),
-        Some(Refer(typeDefs.lookupDirect("bool").get))
-      )
-    ),
-    (
       "not",
-      OpType(
-        Some(List(Refer(typeDefs.lookupDirect("bool").get))),
-        Some(Refer(typeDefs.lookupDirect("bool").get))
+      FunType(
+        List(Refer(typeDefs.lookupDirect("bool").get)),
+        Refer(typeDefs.lookupDirect("bool").get)
       )
     ),
     (
@@ -252,13 +264,6 @@ object BuiltinScope extends Scope(parent = None) {
         Refer(typeDefs.lookupDirect("bool").get)
       )
     ),
-    (
-      "to",
-      FunType(
-        List(Refer(typeDefs.lookupDirect("any").get), Refer(typeDefs.lookupDirect("mexp").get)),
-        Refer(typeDefs.lookupDirect("any").get)
-      )
-    ),
     ("shallow-copy", FunType(List(Refer(typeDefs.lookupDirect("any").get)), Refer(typeDefs.lookupDirect("any").get))),
     ("copy", FunType(List(Refer(typeDefs.lookupDirect("any").get)), Refer(typeDefs.lookupDirect("any").get))),
     ("r", FunType(List(Refer(typeDefs.lookupDirect("any").get)), Refer(typeDefs.lookupDirect("any").get))),
@@ -270,11 +275,6 @@ object BuiltinScope extends Scope(parent = None) {
       "syscall",
       FunType(List(ArrayType(Refer(typeDefs.lookupDirect("any").get))), Refer(typeDefs.lookupDirect("any").get))
     ),
-    ("while", OpType()),
-    ("continue", OpType()),
-    ("break", OpType()),
-    ("for", OpType()),
-    ("cond", OpType()),
     (
       "++",
       FunType(
