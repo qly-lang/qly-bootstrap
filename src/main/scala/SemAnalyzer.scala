@@ -190,12 +190,15 @@ class SemAnalyzer(val ast: AST, val symbolTable: SymbolTable) {
         op.args match {
           case cond :: thenPart :: Nil             => IfOp(op, analyzeMExp(cond, scope), analyzeMExp(thenPart, scope), None)
           case cond :: thenPart :: elsePart :: Nil => IfOp(op, analyzeMExp(cond, scope), analyzeMExp(thenPart, scope), Some(analyzeMExp(elsePart, scope)))
-          case _                                   => semError(MalformedOp("if should be if[condition then else] or if[condition then] form"), op)
+          // TODO: since type analyzer consider all op right now, it should be able to catch error, so don't postpone error catching on this pass
+          case _ => semError(MalformedOp("if should be if[condition then else] or if[condition then] form"), op)
         }
-//      case "new" => op.args match {
-//        case t :: v :: Nil =>
-//          val ty =
-//      }
+      case "new" =>
+        op.args match {
+          case t :: v :: Nil =>
+            val ty = scope.mexpTypeExp(op)
+            NewOp(op, ty, analyzeMExp(v, scope))
+        }
     }
   }
 }
