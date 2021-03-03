@@ -30,13 +30,24 @@ class TypeAnalyzer(val ast: AST) {
           variable,
           new VarDef(variable, Some(mexp), ty, scope = scope)
         )
-      case CallExp(QlySymbol("f"), QlySymbol(fname) :: signature :: _) =>
-        // f[fname signature mexps]
-        val t = signature match {
+      case CallExp(QlySymbol("f"), QlySymbol(fname) :: parameters :: _) =>
+        // f[fname parameters mexps]
+        val t = parameters match {
           case ColonExp(QlyArray(params), returnType) => FunType(processParamTypes(params, scope), processType(returnType, scope))
           case QlyArray(params)                       => FunType(processParamTypes(params, scope), Untyped)
+          case _                                      => semError(MalformedOp("function parameters should be [param:type ...] or [param:type ...]:return-type"), parameters)
         }
         scope.setVar(fname, new VarDef(fname, Some(mexp), t = t, scope = scope))
+      case CallExp(QlySymbol("f"), parameters :: _) =>
+        // f[parameters mexps], a lambda
+        val t = parameters match {
+          case ColonExp(QlyArray(params), returnType) => FunType(processParamTypes(params, scope), processType(returnType, scope))
+          case QlyArray(params)                       => FunType(processParamTypes(params, scope), Untyped)
+          case _ =>
+            semError(MalformedOp("function parameters should be [param:type ...] or [param:type ...]:return-type"), parameters)
+            return
+        }
+        scope.lambdaTypes(mexp) = t
       case CallExp(QlySymbol("t"), args) =>
         // t[...]
         args match {
