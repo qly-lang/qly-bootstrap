@@ -2,7 +2,8 @@ import scala.collection.mutable
 
 class Scope(
     val parent: Option[Scope] = Some(BuiltinScope),
-    val mexp: Option[MExp] = None
+    val mexp: Option[MExp] = None,
+    val retType: Option[TypeExp] = None
 ) {
   val varDefs: EnvChain[String, VarDef] = new EnvChain(
     parent.map(parent => parent.varDefs)
@@ -14,6 +15,8 @@ class Scope(
   val lambdaTypes: mutable.Map[MExp, FunType] = mutable.Map()
   // In new[type exp] and to[type exp], map the MExp "type" to analyzed TypeExp
   val mexpTypeExp: mutable.Map[MExp, TypeExp] = mutable.Map()
+  val tags: mutable.Map[String, Option[TagOp]] = mutable.Map()
+  val pendingGotos: mutable.ArrayBuffer[GotoOp] = mutable.ArrayBuffer()
 
   def lookupVar(sym: QlySymbol): Option[VarDef] =
     lookupVarDirect(sym).orElse(parent match {

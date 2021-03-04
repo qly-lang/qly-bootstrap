@@ -112,6 +112,12 @@ class TypeAnalyzer(val ast: AST) {
         if (args.length != 1 || !args.head.isInstanceOf[QlySymbol]) {
           semError(MalformedOp("tag should be in tag[name] form, and name should be a symbol"), mexp)
         }
+        val tag = args.head.asInstanceOf[QlySymbol]
+        if (scope.tags.contains(tag.value)) {
+          semError(TagExistsInScope, tag)
+        } else {
+          scope.tags(tag.value) = None
+        }
       case CallExp(QlySymbol("goto"), args) =>
         if (args.length != 1 || !args.head.isInstanceOf[QlySymbol]) {
           semError(MalformedOp("goto should be in goto[name] form, and name should be a symbol"), mexp)
@@ -289,7 +295,7 @@ class TypeAnalyzer(val ast: AST) {
   def analyzeTypeMExpIn(mexp: MExp, scope: Scope) = {
     mexp match {
       case CallExp(QlySymbol("f"), (fname: QlySymbol) :: signature :: mexps) => {
-        val newScope = new Scope(Some(scope), Some(mexp))
+        val newScope = new Scope(Some(scope), Some(mexp), Some(scope.lookupType(fname).get.asInstanceOf[FunType].returnType))
         scopes(mexp) = newScope
         signature match {
           case ColonExp(QlyArray(params), _) => processParamVars(params, newScope)
@@ -298,7 +304,7 @@ class TypeAnalyzer(val ast: AST) {
         }
         analyzeTypeMExps(mexps, newScope)
       }
-      case _ => {}
+      case _ => ()
     }
   }
 

@@ -1,8 +1,13 @@
+import scala.collection.mutable
 import scala.util.parsing.input.Positional
 
 case class SemPos(tree: SemTree, i: Int)
 
-class SemTree(val exps: IndexedSeq[SemExp], val scope: Scope)
+class SemTree(val exps: IndexedSeq[SemExp], val scope: Scope) {
+  scope.pendingGotos.foreach(goto =>
+    goto.goto.append(SemPos(this, exps.indexOf(scope.tags(goto.pos.asInstanceOf[CallExp].args.head.asInstanceOf[QlySymbol].value).get)))
+  )
+}
 
 trait SemExp {
   val t: TypeExp
@@ -14,7 +19,10 @@ case class SemErrorExp(error: SemanticError, pos: MExp) extends SemExp {
 }
 
 trait Literal extends SemExp {
-  val pos: Atom
+  val pos: Positional
+}
+case class NilLiteral(pos: Positional) extends Literal {
+  override val t: TypeExp = Refer(BuiltinScope.typeDefs.lookupDirect("nil").get)
 }
 case class Int32Literal(pos: QlyInt32) extends Literal {
   override val t: TypeExp = Refer(BuiltinScope.typeDefs.lookupDirect("int32").get)
@@ -75,8 +83,8 @@ case class IfOp(pos: MExp, condition: SemExp, thenClause: SemExp, elseClause: Op
 case class TagOp(pos: MExp) extends SemExp {
   override val t: TypeExp = Refer(BuiltinScope.typeDefs.lookupDirect("nil").get)
 }
-case class GotoOp(pos: MExp, goto: SemPos) extends SemExp {
-  override val t: TypeExp = Refer(BuiltinScope.typeDefs.lookupDirect("nil").get)
+case class GotoOp(pos: MExp, goto: mutable.ArrayBuffer[SemPos]) extends SemExp {
+  override val t: TypeExp = Refer(BuiltinScope.typeDefs.lookupDirect("nothing").get)
 }
 case class CatchOp(pos: MExp, catchLabel: SymbolValue, t: TypeExp) extends SemExp
 case class ThrowOp(mexp: MExp, catchLabel: SemExp, v: SemExp)
@@ -85,7 +93,7 @@ case class BlockOp(pos: MExp, body: IndexedSeq[SemExp]) extends SemExp {
 }
 case class NewOp(pos: MExp, t: TypeExp, v: SemExp) extends SemExp
 case class ReturnOp(pos: MExp, v: Option[SemExp]) extends SemExp {
-  override val t: TypeExp = if (v.isEmpty) Refer(BuiltinScope.typeDefs.lookupDirect("nil").get) else v.get.t
+  override val t: TypeExp = Refer(BuiltinScope.typeDefs.lookupDirect("nothing").get)
 }
 case class DefOp(pos: MExp, varDef: VarDef, v: Option[SemExp]) extends SemExp {
   override val t: TypeExp = Refer(BuiltinScope.typeDefs.lookupDirect("nil").get)

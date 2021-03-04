@@ -2,7 +2,7 @@ import scala.collection.mutable
 
 class SemAnalyzer(val ast: AST, val symbolTable: SymbolTable) {
   val symbolScopes: mutable.Map[QlySymbol, Scope] = mutable.Map[QlySymbol, Scope]()
-  var errors: mutable.ArrayBuffer[SemErrorExp] = mutable.ArrayBuffer()
+  val errors: mutable.ArrayBuffer[SemErrorExp] = mutable.ArrayBuffer()
 
   def analyze: SemTree = {
     new SemTree(ast.mexps.map(m => analyzeMExp(m, symbolTable.rootScope)).toVector, BuiltinScope)
@@ -199,6 +199,53 @@ class SemAnalyzer(val ast: AST, val symbolTable: SymbolTable) {
             val ty = scope.mexpTypeExp(op)
             NewOp(op, ty, analyzeMExp(v, scope))
         }
+      case "tag" => {
+        val tagOp = TagOp(op)
+        scope.tags(op.args.head.asInstanceOf[QlySymbol].value) = Some(tagOp)
+        tagOp
+      }
+      case "goto" =>
+        val tag = op.args.head.asInstanceOf[QlySymbol].value
+        scope.tags.get(tag) match {
+          case Some(_) =>
+            val goto = GotoOp(op, mutable.ArrayBuffer())
+            scope.pendingGotos.append(goto)
+            goto
+          case None => semError(GotoTagNotExist(tag), op)
+        }
+      case "return" =>
+        val arg = if (op.args.isEmpty) {
+          None
+        } else {
+          Some(analyzeMExp(op.args.head, scope))
+        }
+
+        if (scope == symbolTable.rootScope) {
+          if (arg.isEmpty) {
+            semError(IncompatibleType(Refer(BuiltinScope.typeDefs.lookupDirect("int").get)), op)
+          } else if (Refer(BuiltinScope.typeDefs.lookupDirect("int").get).isSuperOrSame(arg.get.t)) {
+            ReturnOp(op, Some(arg.get))
+          } else {
+            semError(IncompatibleType(Refer(BuiltinScope.typeDefs.lookupDirect("int").get)), op)
+          }
+        } else {
+          val scopeRetType = scope.retType.get
+          val retValType = if (arg.isEmpty) {
+            Refer(BuiltinScope.typeDefs.lookupDirect("nil").get)
+          } else {
+            arg.get.t
+          }
+
+          if (scopeRetType.isSuperOrSame(retValType)) {
+            ReturnOp(op, arg)
+          } else {
+            semError(IncompatibleType(scopeRetType), op)
+          }
+        }
+      case "set" =>
+        val location = op.args.head
+        val value = op.args(1)
+        ???
     }
   }
 }
