@@ -197,6 +197,7 @@ class SemAnalyzer(val ast: AST, val symbolTable: SymbolTable) {
         op.args match {
           case t :: v :: Nil =>
             val ty = scope.mexpTypeExp(op)
+            // TODO: check new feasibility
             NewOp(op, ty, analyzeMExp(v, scope))
         }
       case "tag" => {
@@ -243,9 +244,70 @@ class SemAnalyzer(val ast: AST, val symbolTable: SymbolTable) {
           }
         }
       case "set" =>
-        val location = op.args.head
-        val value = op.args(1)
-        ???
+        val location = processLocation(op.args.head, scope)
+        val value = analyzeMExp(op.args(1), scope)
+        val t = location match {
+          case ErrorSetLocation(error, mexp) => return semError(error, mexp)
+          case SetLocationVar(v)             => v.t
+          case SetLocationArrayAccess(a, _)  => a.t.asInstanceOf[ArrayType].elemType
+          case SetLocationStructAccess(_, f) => f.t
+        }
+        if (t.isSuperOrSame(value.t)) {
+          SetOp(op, location, value)
+        } else {
+          semError(IncompatibleType(t), op.args(1))
+        }
+      case "to" =>
+        op.args match {
+          case t :: v :: Nil =>
+            val ty = scope.mexpTypeExp(op)
+            // TODO: check `to` feasibility, once there's gf mechanism
+            ToOp(op, ty, analyzeMExp(v, scope))
+        }
+    }
+  }
+
+  def processLocation(mexp: MExp, scope: Scope): SetLocation = {
+    mexp match {
+      case s: QlySymbol =>
+        scope.lookupVar(s) match {
+          case Some(v) => SetLocationVar(v)
+          case None =>
+            return ErrorSetLocation(UndefinedVariable(s), s)
+        }
+      case DotExp(v, d) =>
+        val value = analyzeMExp(v, scope)
+        value.t match {
+          case struct: StructType =>
+            if (!d.isInstanceOf[QlySymbol]) {
+              return ErrorSetLocation(BadSetLocation("struct field should be a symbol"), d)
+            }
+            val field = d.asInstanceOf[QlySymbol]
+            struct.fields.find(f => f.name == field.value) match {
+              case Some(f) => SetLocationStructAccess(value, f)
+              case None =>
+                ErrorSetLocation(BadSetLocation("struct field does not exist"), d)
+            }
+          case _ =>
+            ErrorSetLocation(BadSetLocation("expect struct type before dot"), v)
+        }
+      case CallExp(v, args) =>
+        val value = analyzeMExp(v, scope)
+        value.t match {
+          case _: ArrayType =>
+            if (args.length != 1) {
+              return ErrorSetLocation(BadSetLocation("expect only one index"), mexp)
+            }
+            val index = analyzeMExp(args.head, scope)
+            if (!Refer(BuiltinScope.typeDefs.lookupDirect("uint").get).isSuperOrSame(index.t)) {
+              return ErrorSetLocation(BadSetLocation("array index need to be uint"), args.head)
+            }
+            SetLocationArrayAccess(value, index)
+          case _ =>
+            return ErrorSetLocation(BadSetLocation("expect array type before index access"), v)
+        }
+      case _ =>
+        return ErrorSetLocation(BadSetLocation("expect variable, struct or array to set"), mexp)
     }
   }
 }

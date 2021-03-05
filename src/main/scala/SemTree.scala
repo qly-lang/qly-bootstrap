@@ -60,6 +60,9 @@ case class StringLiteral(pos: QlyString) extends Literal {
 case class BoolLiteral(pos: QlySymbol) extends Literal {
   override val t: TypeExp = Refer(BuiltinScope.typeDefs.lookupDirect("bool").get)
 }
+case class SymbolLiteral(pos: QlySymbol) extends Literal {
+  override val t: TypeExp = Refer(BuiltinScope.typeDefs.lookupDirect("symbol").get)
+}
 case class ArrayExp(pos: Positional, t: TypeExp, elems: Seq[SemExp]) extends SemExp
 
 case class VarRef(pos: QlySymbol, varDef: VarDef) extends SemExp {
@@ -92,16 +95,23 @@ case class BlockOp(pos: MExp, body: IndexedSeq[SemExp]) extends SemExp {
   override val t: TypeExp = if (body.isEmpty) Refer(BuiltinScope.typeDefs.lookupDirect("nil").get) else body.last.t
 }
 case class NewOp(pos: MExp, t: TypeExp, v: SemExp) extends SemExp
+case class ToOp(pos: MExp, t: TypeExp, v: SemExp) extends SemExp
 case class ReturnOp(pos: MExp, v: Option[SemExp]) extends SemExp {
   override val t: TypeExp = Refer(BuiltinScope.typeDefs.lookupDirect("nothing").get)
 }
 case class DefOp(pos: MExp, varDef: VarDef, v: Option[SemExp]) extends SemExp {
   override val t: TypeExp = Refer(BuiltinScope.typeDefs.lookupDirect("nil").get)
 }
-case class SetOp(pos: MExp, varDef: VarDef, v: SemExp) extends SemExp {
+case class SetOp(pos: MExp, location: SetLocation, v: SemExp) extends SemExp {
   override val t: TypeExp = Refer(BuiltinScope.typeDefs.lookupDirect("nil").get)
 }
 case class FunOp(pos: MExp, t: FunType, paramNames: Seq[SymbolValue], body: SemTree) extends SemExp
 case class NoOp(pos: MExp) extends SemExp {
   override val t: TypeExp = Refer(BuiltinScope.typeDefs.lookupDirect("nil").get)
 }
+
+trait SetLocation
+case class SetLocationVar(varDef: VarDef) extends SetLocation
+case class SetLocationArrayAccess(arrayLocation: SemExp, index: SemExp) extends SetLocation
+case class SetLocationStructAccess(structLocation: SemExp, field: StructField) extends SetLocation
+case class ErrorSetLocation(error: SemanticError, mexp: MExp) extends SetLocation

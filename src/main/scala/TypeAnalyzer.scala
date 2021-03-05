@@ -295,7 +295,7 @@ class TypeAnalyzer(val ast: AST) {
   def analyzeTypeMExpIn(mexp: MExp, scope: Scope) = {
     mexp match {
       case CallExp(QlySymbol("f"), (fname: QlySymbol) :: signature :: mexps) => {
-        val newScope = new Scope(Some(scope), Some(mexp), Some(scope.lookupType(fname).get.asInstanceOf[FunType].returnType))
+        val newScope = new Scope(Some(scope), Some(mexp), Some(scope.lookupVar(fname).get.t.asInstanceOf[FunType].returnType))
         scopes(mexp) = newScope
         signature match {
           case ColonExp(QlyArray(params), _) => processParamVars(params, newScope)
