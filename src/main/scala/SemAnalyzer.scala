@@ -4,8 +4,8 @@ class SemAnalyzer(val ast: AST, val symbolTable: SymbolTable) {
   val symbolScopes: mutable.Map[QlySymbol, Scope] = mutable.Map[QlySymbol, Scope]()
   val errors: mutable.ArrayBuffer[SemErrorExp] = mutable.ArrayBuffer()
 
-  def analyze: SemTree = {
-    new SemTree(ast.mexps.map(m => analyzeMExp(m, symbolTable.rootScope)).toVector, BuiltinScope)
+  def analyze: SemAnalyzeResult = {
+    new SemAnalyzeResult(new SemTree(ast.mexps.map(m => analyzeMExp(m, symbolTable.rootScope)).toVector, BuiltinScope), errors.toVector)
   }
 
   def semError(error: SemanticError, mexp: MExp): SemErrorExp = {
@@ -311,3 +311,5 @@ class SemAnalyzer(val ast: AST, val symbolTable: SymbolTable) {
     }
   }
 }
+
+class SemAnalyzeResult(val semTree: SemTree, val errors: Vector[SemErrorExp])
