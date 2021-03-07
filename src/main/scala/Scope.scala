@@ -97,4 +97,6 @@ class TypeDef(
     }
     res.toList
   }
+
+  override def toString: String = s"TypeDef($name)"
 }
